@@ -1,0 +1,35 @@
+---
+alwaysApply: true
+---
+
+# AI 朋友圈项目结构指南
+
+这是一个 Next.js 15 全栈应用，使用 TypeScript、Prisma、Redis 和 Tailwind CSS 构建的 AI 聊天应用。
+
+## 核心文件结构
+
+- **主入口**: [src/app/page.tsx](mdc:src/app/page.tsx) - 应用首页，提供创建对话的入口
+- **布局文件**: [src/app/layout.tsx](mdc:src/app/layout.tsx) - 根布局组件
+- **数据库配置**: [src/lib/db.ts](mdc:src/lib/db.ts) - Prisma 客户端配置
+- **数据库模式**: [prisma/schema.prisma](mdc:prisma/schema.prisma) - 定义用户、对话、消息等数据模型
+- **API 路由**: `src/app/api/` - 包含对话和消息的 API 端点
+
+## 主要功能模块
+
+1. **对话管理**: 用户可以创建和管理 AI 对话
+2. **消息系统**: 支持用户与 AI 的实时聊天
+3. **多 AI 智能体**: 支持不同类型的 AI 角色（共情、规划、建议等）
+4. **流程控制**: 基于 Flow 模型的对话流程管理
+
+## UI 组件
+
+使用 shadcn/ui 组件库，位于 [src/components/ui/](mdc:src/components/ui/) 目录。
+
+## 技术栈
+
+- Next.js 15 + React 19
+- TypeScript
+- Prisma + PostgreSQL
+- Redis
+- Tailwind CSS
+- Radix UI / shadcn/ui

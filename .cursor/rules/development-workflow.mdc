@@ -1,0 +1,133 @@
+---
+description: 开发工作流程和最佳实践
+---
+
+# 开发工作流程和最佳实践
+
+## 项目启动
+
+### 开发环境
+
+```bash
+# 安装依赖
+pnpm install
+
+# 启动开发服务器（使用 Turbopack）
+pnpm dev
+
+# 数据库操作
+npx prisma generate
+npx prisma db push
+npx prisma db seed
+```
+
+### 构建和部署
+
+```bash
+# 构建生产版本
+pnpm build
+
+# 启动生产服务器
+pnpm start
+
+# 代码检查
+pnpm lint
+```
+
+## 开发规范
+
+### 文件命名
+
+- **页面组件**: `page.tsx` (Next.js 约定)
+- **布局组件**: `layout.tsx`
+- **API 路由**: `route.ts`
+- **UI 组件**: `kebab-case.tsx` (如 `button.tsx`)
+- **工具函数**: `camelCase.ts` (如 `utils.ts`)
+
+### 代码组织
+
+1. **导入顺序**:
+
+   - React 相关
+   - Next.js 相关
+   - 第三方库
+   - 项目内部组件和工具
+
+2. **组件结构**:
+
+```tsx
+"use client"; // 如果需要客户端功能
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+
+export default function ComponentName() {
+  // hooks
+  // 事件处理函数
+  // 渲染
+}
+```
+
+### Git 工作流
+
+- 使用有意义的提交信息
+- 小步骤提交，频繁推送
+- 在推送前运行 `pnpm lint`
+
+## 调试和错误处理
+
+### 常见问题
+
+1. **数据库连接**: 检查环境变量 `DATABASE_URL`
+2. **Prisma 错误**: 运行 `npx prisma generate`
+3. **类型错误**: 检查 TypeScript 配置和导入路径
+
+### 日志记录
+
+- API 路由中使用 `console.error` 记录错误
+- 客户端使用浏览器开发者工具
+- 使用有意义的错误消息
+
+## 性能优化
+
+### Next.js 优化
+
+- 使用 `"use client"` 指令区分服务端和客户端组件
+- 利用 Next.js 的图片优化
+- 使用动态导入减少包大小
+
+### 数据库优化
+
+- 使用 Prisma 的 `include` 而不是多次查询
+- 注意 N+1 查询问题
+- 合理使用索引
+
+### UI 优化
+
+- 使用 React.memo 优化重渲染
+- 合理使用 useCallback 和 useMemo
+- 避免内联对象和函数
+
+## 测试策略
+
+### 单元测试
+
+- 测试工具函数
+- 测试 API 路由逻辑
+- 测试组件行为
+
+### 集成测试
+
+- 测试完整的用户流程
+- 测试数据库操作
+- 测试 API 端点
+
+## 部署检查清单
+
+- [ ] 环境变量配置正确
+- [ ] 数据库迁移已应用
+- [ ] 构建无错误
+- [ ] 代码通过 lint 检查
+- [ ] 测试通过
+- [ ] 生产配置已验证

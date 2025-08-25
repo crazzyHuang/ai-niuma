@@ -1,0 +1,95 @@
+---
+globs: **/api/**/*.ts
+---
+
+# API 路由开发规范
+
+## 文件结构
+
+API 路由位于 [src/app/api/](mdc:src/app/api/) 目录，使用 App Router 的文件约定：
+
+- `route.ts` - 定义 HTTP 方法处理器
+- `[id]/route.ts` - 动态路由参数
+- 嵌套路径表示 API 层级结构
+
+## 标准模板
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/db";
+
+export async function GET(request: NextRequest) {
+  try {
+    // 处理 GET 请求
+    return NextResponse.json({ data: "success" });
+  } catch (error) {
+    console.error("API Error:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    // 验证输入
+    if (!body.requiredField) {
+      return NextResponse.json(
+        { error: "Required field missing" },
+        { status: 400 }
+      );
+    }
+
+    // 数据库操作
+    const result = await prisma.model.create({
+      data: body,
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("API Error:", error);
+    return NextResponse.json(
+      { error: "Failed to create resource" },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## 错误处理
+
+1. **总是使用 try-catch 包装**
+2. **返回适当的 HTTP 状态码**
+   - 200: 成功
+   - 400: 客户端错误（缺少参数等）
+   - 500: 服务器错误
+3. **记录错误日志**
+4. **返回有意义的错误消息**
+
+## 数据库操作
+
+- 使用 [src/lib/db.ts](mdc:src/lib/db.ts) 中的 prisma 客户端
+- 基于 [prisma/schema.prisma](mdc:prisma/schema.prisma) 模型进行操作
+- 包含适当的错误处理
+
+## 参数获取
+
+```typescript
+// URL 参数
+const { searchParams } = new URL(request.url);
+const page = searchParams.get("page");
+
+// 路径参数
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const { id } = params;
+}
+
+// 请求体
+const body = await request.json();
+```

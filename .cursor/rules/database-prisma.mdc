@@ -1,0 +1,124 @@
+---
+globs: **/prisma/**/*,**/lib/db.ts
+---
+
+# 数据库和 Prisma 使用规范
+
+## 数据库配置
+
+- **数据库**: PostgreSQL
+- **ORM**: Prisma
+- **客户端**: [src/lib/db.ts](mdc:src/lib/db.ts)
+- **Schema**: [prisma/schema.prisma](mdc:prisma/schema.prisma)
+
+## 数据模型
+
+基于 [prisma/schema.prisma](mdc:prisma/schema.prisma) 的核心模型：
+
+### User 模型
+
+```prisma
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  plan          String         @default("free")
+  createdAt     DateTime       @default(now())
+  conversations Conversation[]
+}
+```
+
+### Conversation 模型
+
+```prisma
+model Conversation {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  title       String
+  mode        String // empathy | plan | compare | study | code
+  budgetCents Int          @default(500)
+  createdAt   DateTime     @default(now())
+  messages    Message[]
+  deployments Deployment[]
+}
+```
+
+### 其他重要模型
+
+- **Message**: 对话消息，包含角色（user/ai）和内容
+- **Agent**: AI 智能体配置，定义不同的 AI 角色
+- **Flow**: 对话流程定义，包含步骤和逻辑
+- **Artifact**: 生成的文件或链接
+- **Deployment**: 部署记录
+
+## 数据库操作规范
+
+1. **始终使用 prisma 客户端**
+
+```typescript
+import prisma from "@/lib/db";
+```
+
+2. **常用操作模式**
+
+```typescript
+// 查找单个记录
+const user = await prisma.user.findUnique({
+  where: { email: "test@example.com" },
+});
+
+// 创建记录
+const conversation = await prisma.conversation.create({
+  data: {
+    userId: user.id,
+    title: "新对话",
+    mode: "empathy",
+  },
+});
+
+// 查找多个记录（包含关联）
+const conversations = await prisma.conversation.findMany({
+  where: { userId },
+  include: {
+    messages: true,
+    user: true,
+  },
+  orderBy: { createdAt: "desc" },
+});
+```
+
+3. **事务操作**
+
+```typescript
+const result = await prisma.$transaction(async (tx) => {
+  const conversation = await tx.conversation.create({
+    data: {
+      /* ... */
+    },
+  });
+
+  const message = await tx.message.create({
+    data: {
+      convId: conversation.id,
+      /* ... */
+    },
+  });
+
+  return { conversation, message };
+});
+```
+
+## Migration 管理
+
+- 使用 `npx prisma migrate dev` 开发环境迁移
+- 使用 `npx prisma db push` 快速同步 schema 变更
+- 生产环境使用 `npx prisma migrate deploy`
+
+## 开发建议
+
+1. **总是包含错误处理**
+2. **使用 include 获取关联数据**
+3. **注意查询性能，避免 N+1 问题**
+4. **使用事务处理复杂操作**
+5. **定期运行 `npx prisma generate` 更新类型**

@@ -239,28 +239,59 @@ services:
       - "6379:6379"
 ```
 
-## 🎯 下一步计划
+## 🚀 应用程序测试
 
-### 阶段 1: 后端 API (文档第4步)
+### 快速启动
 ```bash
-# 需要创建的文件
-src/app/api/conversations/route.ts     # 创建会话
-src/app/api/conversations/[id]/messages/route.ts  # 发送消息
-src/app/api/conversations/[id]/events/route.ts    # SSE 事件流
+# 1. 启动 Docker 服务
+docker-compose up -d
+
+# 2. 启动开发服务器
+pnpm dev
+
+# 3. 打开浏览器访问 http://localhost:3000
 ```
 
-### 阶段 2: 编排器引擎 (文档第5步)
+### 测试聊天功能
+1. **创建对话**: 在首页输入对话主题，点击"开始对话"
+2. **发送消息**: 在聊天页面输入消息并发送
+3. **查看响应**: 观察 AI 的流式响应（共情者 → 建议师 → 关怀师）
+4. **实时更新**: 消息会实时显示，支持打字机效果
+
+### 查看数据
 ```bash
-# 需要创建的文件
-src/lib/orchestrator/engine.ts        # 编排器核心
-src/lib/sse-manager.ts               # SSE 管理器
+# 查看 Prisma Studio（数据库可视化工具）
+npx prisma studio
+
+# 查看所有对话
+npx prisma studio --browser=none --port=5555
 ```
 
-### 阶段 3: 前端界面 (文档第6步)
-```bash
-# 需要创建的文件
-src/app/chat/[id]/page.tsx           # 聊天页面
-```
+## 🎯 项目完成状态
+
+### ✅ 已完成
+- [x] 完整的用户界面（首页 + 聊天页面）
+- [x] 后端 API (创建会话、发送消息、SSE 流)
+- [x] 模拟 AI 响应工作流（3 个智能体）
+- [x] 实时消息流和乐观更新
+- [x] 响应式设计和现代化 UI
+- [x] 完整的数据库集成
+- [x] Docker 环境配置
+
+### 🔄 核心功能演示
+1. **对话创建**: 用户可以在首页创建新对话
+2. **消息发送**: 支持实时消息发送和显示
+3. **AI 响应**: 模拟 3 个 AI 智能体的协作响应
+4. **流式输出**: 支持逐字显示的打字机效果
+5. **数据持久化**: 所有消息和对话都保存在数据库中
+
+## 📈 项目亮点
+
+- **现代化架构**: Next.js 15 + TypeScript + Tailwind CSS
+- **实时通信**: Server-Sent Events 实现实时消息
+- **类型安全**: 完整的 TypeScript 类型定义
+- **用户体验**: 流畅的界面和交互设计
+- **开发友好**: 清晰的项目结构和详细文档
 
 ## 🔗 重要链接
 

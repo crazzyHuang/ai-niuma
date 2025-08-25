@@ -1,0 +1,67 @@
+---
+globs: *.tsx,**/components/**/*.ts
+---
+
+# UI 组件开发规范
+
+## shadcn/ui 组件库
+
+项目使用 shadcn/ui 作为主要 UI 组件库，所有组件位于 [src/components/ui/](mdc:src/components/ui/) 目录。
+
+## 可用组件
+
+- **Button**: [src/components/ui/button.tsx](mdc:src/components/ui/button.tsx) - 按钮组件
+- **Card**: [src/components/ui/card.tsx](mdc:src/components/ui/card.tsx) - 卡片容器
+- **Input**: [src/components/ui/input.tsx](mdc:src/components/ui/input.tsx) - 输入框
+- **Label**: [src/components/ui/label.tsx](mdc:src/components/ui/label.tsx) - 标签
+- **Avatar**: [src/components/ui/avatar.tsx](mdc:src/components/ui/avatar.tsx) - 头像组件
+- **ScrollArea**: [src/components/ui/scroll-area.tsx](mdc:src/components/ui/scroll-area.tsx) - 滚动区域
+
+## 使用规范
+
+1. **始终从 @/components/ui 导入组件**
+
+```typescript
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+```
+
+2. **使用 Lucide React 图标**
+
+```typescript
+import { MessageCircle, Sparkles, Users } from "lucide-react";
+```
+
+3. **组件组合模式**
+   Card 组件采用组合模式：
+
+```tsx
+<Card>
+  <CardHeader>
+    <CardTitle>标题</CardTitle>
+    <CardDescription>描述</CardDescription>
+  </CardHeader>
+  <CardContent>内容</CardContent>
+</Card>
+```
+
+4. **响应式设计**
+   使用 Tailwind CSS 响应式类：
+
+```tsx
+<div className="grid md:grid-cols-3 gap-6">
+```
+
+## 组件开发原则
+
+- 使用函数组件和 hooks
+- 保持组件单一职责
+- 使用 TypeScript 接口定义 props
+- 添加适当的 accessibility 属性
+- 使用 className 而不是 style 属性
+
+## 状态管理
+
+- 使用 React hooks (useState, useEffect 等)
+- 对于表单使用受控组件
+- 使用 useRouter 进行页面导航

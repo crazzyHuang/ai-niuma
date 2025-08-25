@@ -5,9 +5,10 @@ export default defineConfig({
   // Schema configuration - specify the path to your Prisma schema
   schema: path.join('prisma', 'schema.prisma'),
   
-  // Migrations configuration
+  // Migrations configuration with seed
   migrations: {
     path: path.join('prisma', 'migrations'),
+    seed: path.join('prisma', 'seed.ts'),
   },
   
   // Views configuration (for database views)

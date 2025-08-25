@@ -1,103 +1,143 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { MessageCircle, Sparkles, Users } from 'lucide-react';
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [title, setTitle] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleCreateConversation = async () => {
+    if (!title.trim()) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          mode: 'empathy' // Default mode for now
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        router.push(`/chat/${data.id}`);
+      } else {
+        console.error('Failed to create conversation');
+      }
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isLoading) {
+      handleCreateConversation();
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="max-w-4xl w-full">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="flex items-center justify-center mb-4">
+            <MessageCircle className="w-12 h-12 text-blue-600 mr-3" />
+            <h1 className="text-4xl font-bold text-gray-900">AI 朋友圈</h1>
+          </div>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            与 AI 智能体展开温暖的对话，获得共情、建议和关怀支持
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {/* Features */}
+        <div className="grid md:grid-cols-3 gap-6 mb-12">
+          <Card className="text-center">
+            <CardHeader>
+              <Users className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+              <CardTitle className="text-lg">共情理解</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                AI 能够倾听您的感受，提供温暖的共情回应
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          <Card className="text-center">
+            <CardHeader>
+              <Sparkles className="w-8 h-8 text-green-600 mx-auto mb-2" />
+              <CardTitle className="text-lg">实用建议</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                基于您的具体情况，提供可行的解决方案
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          <Card className="text-center">
+            <CardHeader>
+              <MessageCircle className="w-8 h-8 text-purple-600 mx-auto mb-2" />
+              <CardTitle className="text-lg">持续关怀</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                提供温暖的后续问候和长期支持
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Create Conversation */}
+        <Card className="max-w-md mx-auto">
+          <CardHeader>
+            <CardTitle>开始新对话</CardTitle>
+            <CardDescription>
+              描述您当前的心情或需要帮助的问题
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="title">对话主题</Label>
+              <Input
+                id="title"
+                placeholder="例如：今天工作压力很大，想聊聊..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyPress={handleKeyPress}
+                disabled={isLoading}
+              />
+            </div>
+            <Button
+              onClick={handleCreateConversation}
+              disabled={!title.trim() || isLoading}
+              className="w-full"
+            >
+              {isLoading ? '创建中...' : '开始对话'}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Footer */}
+        <div className="text-center mt-12 text-gray-500">
+          <p className="text-sm">
+            AI 朋友圈 - 您的贴心 AI 陪伴
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

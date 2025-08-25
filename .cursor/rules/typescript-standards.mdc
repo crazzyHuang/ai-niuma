@@ -1,0 +1,63 @@
+---
+globs: *.ts,*.tsx
+---
+
+# TypeScript 编码规范
+
+## 基本规则
+
+1. **始终使用 TypeScript 严格模式** - 项目已启用 `strict: true`
+2. **使用明确的类型定义** - 避免使用 `any`，优先使用具体类型
+3. **接口和类型定义** - 为 props、API 响应、数据库模型等定义类型
+
+## 路径别名
+
+使用配置的路径别名：
+
+```typescript
+import { Button } from "@/components/ui/button";
+import prisma from "@/lib/db";
+```
+
+## API 路由类型
+
+所有 API 路由都应该：
+
+- 使用 `NextRequest` 和 `NextResponse`
+- 包含适当的错误处理
+- 返回类型化的 JSON 响应
+
+示例：
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(request: NextRequest) {
+  try {
+    const { title, mode } = await request.json();
+    // 处理逻辑
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Something went wrong" },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## React 组件类型
+
+- 使用函数组件和 React hooks
+- 为 props 定义接口
+- 使用 `React.FC` 或直接函数定义
+
+## 数据库类型
+
+基于 [prisma/schema.prisma](mdc:prisma/schema.prisma) 的模型：
+
+- User: 用户信息
+- Conversation: 对话记录
+- Message: 消息内容
+- Agent: AI 智能体配置
+- Flow: 对话流程定义
