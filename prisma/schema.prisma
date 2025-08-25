@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  plan          String         @default("free")
+  createdAt     DateTime       @default(now())
+  conversations Conversation[]
+}
+
+model Conversation {
+  id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  title       String
+  mode        String // empathy | plan | compare | study | code ...
+  budgetCents Int          @default(500)
+  createdAt   DateTime     @default(now())
+  messages    Message[]
+  deployments Deployment[]
+}
+
+model Message {
+  id        String       @id @default(cuid())
+  convId    String
+  role      String // user | ai
+  agentId   String?
+  step      String? // Corresponds to roleTag like PLAN, EMPATHY
+  content   String
+  tokens    Int          @default(0)
+  costCents Int          @default(0)
+  createdAt DateTime     @default(now())
+  conv      Conversation @relation(fields: [convId], references: [id])
+}
+
+model Agent {
+  id       String  @id @default(cuid())
+  name     String
+  provider String // openai | anthropic | google | deepseek | doubao | xai
+  roleTag  String  @unique // PLAN | AUGMENT | EMPATHY ...
+  order    Int
+  prompt   String
+  enabled  Boolean @default(true)
+}
+
+model Flow {
+  id      String  @id @default(cuid())
+  name    String
+  mode    String  @unique
+  steps   Json // [{roleTag, provider, maxTokens, limitChars,...}]
+  enabled Boolean @default(true)
+}
+
+model Artifact {
+  id     String @id @default(cuid())
+  convId String
+  type   String // zip | file | link
+  url    String
+  meta   Json?
+}
+
+model Deployment {
+  id        String       @id @default(cuid())
+  convId    String
+  conv      Conversation @relation(fields: [convId], references: [id])
+  provider  String // vercel | railway
+  status    String // pending | building | success | failed
+  url       String?
+  logsUrl   String?
+  meta      Json?
+  createdAt DateTime     @default(now())
+}

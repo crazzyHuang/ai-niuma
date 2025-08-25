@@ -47,8 +47,9 @@ npx shadcn-ui@latest init
 
 安装需要的 shadcn/ui 组件：
 ```bash
-npx shadcn-ui@latest add button card input scroll-area separator avatar alert toast
+npx shadcn@latest add button card input scroll-area separator avatar alert toast
 ```
+-- The toast component is deprecated. Use the sonner component instead.
 
 ### 2.2 配置本地开发环境
 
