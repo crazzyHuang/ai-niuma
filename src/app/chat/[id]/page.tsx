@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu } from 'lucide-react';
+
+// 使用 lucide-react 图标组件
 
 interface Message {
   id: string;
@@ -28,21 +31,15 @@ interface StreamChunk {
   timestamp: Date;
 }
 
-// Typing indicator component
-function TypingIndicator({ agent }: { agent: string }) {
-  const [dots, setDots] = useState('');
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDots(prev => prev.length >= 3 ? '' : prev + '.');
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, []);
-
+// Typing indicator component - 微信风格 shadcn颜色
+function TypingIndicator() {
   return (
-    <div className="flex items-center space-x-1 mt-2">
-      <span className="text-xs text-green-600">正在输入{dots}</span>
+    <div className="flex items-center space-x-1 mt-1">
+      <div className="flex space-x-1">
+        <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce"></div>
+        <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+        <div className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+      </div>
     </div>
   );
 }
@@ -220,56 +217,80 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      {/* Header */}
-      <div className="border-b p-4">
-        <h1 className="text-xl font-semibold">AI 朋友圈对话</h1>
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">对话ID: {conversationId}</p>
-          {currentAgent && (
-            <Badge variant="outline" className="animate-pulse">
-              {currentAgent} 正在思考...
-            </Badge>
-          )}
+    <div className="min-h-screen bg-background/50 flex items-center justify-center p-4">
+      <div className="w-full max-w-4xl mx-auto bg-background rounded-xl shadow-lg overflow-hidden border border-border">
+        {/* 微信风格头部导航栏 - shadcn颜色 */}
+        <div className="bg-background border-b border-border px-4 py-3 flex items-center justify-between">
+          <button className="p-1 text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div className="flex flex-col items-center">
+            <h1 className="text-lg font-medium">AI朋友圈</h1>
+            {currentAgent && (
+              <span className="text-xs text-muted-foreground animate-pulse">
+                {currentAgent} 正在输入...
+              </span>
+            )}
+          </div>
+          <button className="p-1 text-muted-foreground hover:text-foreground">
+            <MoreVertical className="h-5 w-5" />
+          </button>
         </div>
-      </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-        <div className="space-y-4">
+      {/* 微信风格消息区域 - shadcn颜色 */}
+      <ScrollArea className="h-[600px] bg-background" ref={scrollAreaRef}>
+        <div className="p-3 space-y-2">
           {messages.map((message) => (
             <div
               key={message.id}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in-0 slide-in-from-bottom-1 duration-300`}
             >
-              <div className={`flex items-start space-x-2 max-w-[70%] ${
+              <div className={`flex items-end space-x-2 max-w-[85%] ${
                 message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
               }`}>
-                <Avatar className="h-8 w-8">
+                {/* 头像 - shadcn颜色 */}
+                <Avatar className="h-8 w-8 mb-1">
                   <div className={`h-full w-full rounded-full flex items-center justify-center text-xs font-medium ${
                     message.role === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-500 text-white'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
                   }`}>
-                    {message.role === 'user' ? '我' : 'AI'}
+                    {message.role === 'user' ? '我' : '🤖'}
                   </div>
                 </Avatar>
-                <div className={`rounded-lg p-3 shadow-sm ${
+
+                {/* 消息气泡 - shadcn颜色 */}
+                <div className={`relative px-3 py-2 max-w-full ${
                   message.role === 'user'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                    ? 'bg-primary text-primary-foreground rounded-l-lg rounded-tr-lg rounded-br-sm'
+                    : 'bg-muted text-foreground rounded-r-lg rounded-tl-lg rounded-bl-sm'
                 }`}>
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  <div className="mt-1 flex items-center justify-between">
+                  {/* 微信风格气泡尾巴 */}
+                  <div className={`absolute bottom-0 w-0 h-0 ${
+                    message.role === 'user'
+                      ? 'right-0 border-l-[8px] border-l-primary border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent'
+                      : 'left-0 border-r-[8px] border-r-muted border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent'
+                  }`}></div>
+
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+
+                  {/* 时间和代理标识 */}
+                  <div className={`mt-1 flex items-center justify-between ${
+                    message.role === 'user' ? 'flex-row-reverse' : ''
+                  }`}>
                     <span className={`text-xs ${
-                      message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
+                      message.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
                     }`}>
-                      {message.timestamp.toLocaleTimeString()}
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {message.agent && (
-                      <Badge variant="secondary" className="text-xs">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ml-2 ${
+                        message.role === 'user'
+                          ? 'bg-primary/20 text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      }`}>
                         {message.agent}
-                      </Badge>
+                      </span>
                     )}
                   </div>
                 </div>
@@ -277,64 +298,41 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             </div>
           ))}
 
-          {/* Streaming message */}
+          {/* 流式消息 - 微信风格 */}
           {streamingMessage && (
             <div className="flex justify-start animate-in fade-in-0 slide-in-from-bottom-2 duration-500">
-              <div className="flex items-start space-x-2 max-w-[70%]">
-                <Avatar className="h-8 w-8 animate-in zoom-in-50 duration-300">
-                  <div className={`h-full w-full rounded-full flex items-center justify-center text-xs font-medium ${
-                    streamingMessage.agent === 'EMPATHY' ? 'bg-pink-500' :
-                    streamingMessage.agent === 'PRACTICAL' ? 'bg-blue-500' :
-                    streamingMessage.agent === 'CREATIVE' ? 'bg-purple-500' :
-                    streamingMessage.agent === 'ANALYST' ? 'bg-orange-500' :
-                    streamingMessage.agent === 'FOLLOWUP' ? 'bg-green-500' :
-                    'bg-green-500'
-                  } text-white`}>
-                    {streamingMessage.agent.slice(0, 1)}
+              <div className="flex items-end space-x-2 max-w-[85%]">
+                <Avatar className="h-8 w-8 mb-1 animate-in zoom-in-50 duration-300">
+                  <div className="h-full w-full rounded-full bg-muted flex items-center justify-center text-xs">
+                    🤖
                   </div>
                 </Avatar>
-                <div className={`rounded-lg p-3 border shadow-sm animate-in slide-in-from-left-2 duration-300 ${
-                  streamingMessage.agent === 'EMPATHY' ? 'bg-pink-50 border-pink-200' :
-                  streamingMessage.agent === 'PRACTICAL' ? 'bg-blue-50 border-blue-200' :
-                  streamingMessage.agent === 'CREATIVE' ? 'bg-purple-50 border-purple-200' :
-                  streamingMessage.agent === 'ANALYST' ? 'bg-orange-50 border-orange-200' :
-                  streamingMessage.agent === 'FOLLOWUP' ? 'bg-green-50 border-green-200' :
-                  'bg-green-50 border-green-200'
-                }`}>
-                  <p className="text-sm whitespace-pre-wrap">{streamingMessage.content}</p>
+                <div className="relative bg-muted text-foreground rounded-r-lg rounded-tl-lg rounded-bl-sm px-3 py-2 animate-in slide-in-from-left-2 duration-300">
+                  <div className="absolute left-0 bottom-0 w-0 h-0 border-r-[8px] border-r-muted border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent"></div>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{streamingMessage.content}</p>
                   <div className="mt-1 flex items-center justify-between">
-                    <TypingIndicator agent={streamingMessage.agent} />
-                    <Badge variant="outline" className={`text-xs ${
-                      streamingMessage.agent === 'EMPATHY' ? 'bg-pink-50 text-pink-700 border-pink-200' :
-                      streamingMessage.agent === 'PRACTICAL' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                      streamingMessage.agent === 'CREATIVE' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                      streamingMessage.agent === 'ANALYST' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                      streamingMessage.agent === 'FOLLOWUP' ? 'bg-green-50 text-green-700 border-green-200' :
-                      'bg-green-50 text-green-700 border-green-200'
-                    }`}>
+                    <TypingIndicator />
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground ml-2">
                       {streamingMessage.agent}
-                    </Badge>
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Loading indicator for conversation complete */}
+          {/* 加载指示器 - 微信风格 */}
           {isLoading && !streamingMessage && (
             <div className="flex justify-start">
-              <div className="flex items-start space-x-2 max-w-[70%]">
-                <Avatar className="h-8 w-8">
-                  <div className="h-full w-full rounded-full flex items-center justify-center text-xs font-medium bg-gray-500 text-white">
-                    AI
+              <div className="flex items-end space-x-2 max-w-[85%]">
+                <Avatar className="h-8 w-8 mb-1">
+                  <div className="h-full w-full rounded-full bg-muted flex items-center justify-center text-xs">
+                    🤖
                   </div>
                 </Avatar>
-                <div className="rounded-lg p-3 bg-gray-100">
-                  <div className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  </div>
+                <div className="relative bg-muted rounded-r-lg rounded-tl-lg rounded-bl-sm px-3 py-2">
+                  <div className="absolute left-0 bottom-0 w-0 h-0 border-r-[8px] border-r-muted border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent"></div>
+                  <TypingIndicator />
                 </div>
               </div>
             </div>
@@ -342,20 +340,62 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         </div>
       </ScrollArea>
 
-      {/* Input Form */}
-      <div className="border-t p-4">
-        <form onSubmit={handleSubmit} className="flex space-x-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="输入您的消息..."
-            disabled={isLoading}
-            className="flex-1"
-          />
-          <Button type="submit" disabled={!input.trim() || isLoading}>
-            {isLoading ? 'AI思考中...' : '发送'}
+      {/* 微信风格输入框 - shadcn颜色 */}
+      <div className="bg-muted/30 border-t border-border px-3 py-2">
+        <form onSubmit={handleSubmit} className="flex items-end space-x-2">
+          <div className="flex-1 relative">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="输入消息..."
+              disabled={isLoading}
+              className="bg-background border-border rounded-full px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+            {/* 语音输入按钮 */}
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+            >
+              <Mic className="h-4 w-4" />
+            </button>
+          </div>
+          <Button
+            type="submit"
+            disabled={!input.trim() || isLoading}
+            className="rounded-full px-4 py-2 text-sm font-medium transition-colors"
+            size="sm"
+          >
+            {isLoading ? (
+              <div className="flex items-center space-x-1">
+                <TypingIndicator />
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1">
+                <span>发送</span>
+                <Send className="h-4 w-4" />
+              </div>
+            )}
           </Button>
         </form>
+
+        {/* 工具栏 - 暂时隐藏，开发完成后放开 */}
+        {/* <div className="flex items-center justify-between mt-1 text-muted-foreground">
+          <div className="flex space-x-3">
+            <button className="p-1 hover:text-foreground transition-colors">
+              <FileText className="h-4 w-4" />
+            </button>
+            <button className="p-1 hover:text-foreground transition-colors">
+              <Camera className="h-4 w-4" />
+            </button>
+            <button className="p-1 hover:text-foreground transition-colors">
+              <MapPin className="h-4 w-4" />
+            </button>
+          </div>
+          <button className="p-1 hover:text-foreground transition-colors">
+            <Menu className="h-4 w-4" />
+          </button>
+        </div> */}
+      </div>
       </div>
     </div>
   );
