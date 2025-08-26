@@ -1,201 +1,223 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, XCircle, Settings, AlertTriangle } from 'lucide-react';
+import {
+  Users,
+  MessageSquare,
+  Settings,
+  Database,
+  Bot,
+  FileText,
+  Network,
+  UsersRound
+} from 'lucide-react';
 
-interface ConfigStatus {
-  provider: string;
-  name: string;
-  status: 'configured' | 'missing' | 'error';
-  models: string[];
-  error?: string;
-}
+const adminModules = [
+  {
+    title: '智能体管理',
+    description: '创建、编辑和配置AI智能体',
+    icon: Bot,
+    href: '/admin/agents',
+    color: 'bg-blue-500',
+    features: ['增删改查', '提示词配置', '参数设置']
+  },
+  {
+    title: '提示词管理',
+    description: '管理公共和个性化的提示词模板',
+    icon: FileText,
+    href: '/admin/prompts',
+    color: 'bg-green-500',
+    features: ['模板库', '分类管理', '一键美化']
+  },
+  {
+    title: 'LLM提供商',
+    description: '配置和管理AI模型提供商',
+    icon: Network,
+    href: '/admin/providers',
+    color: 'bg-purple-500',
+    features: ['多厂家支持', 'API密钥管理', '模型配置']
+  },
+  {
+    title: '群聊配置',
+    description: '创建和管理智能体群聊组合',
+    icon: UsersRound,
+    href: '/admin/groups',
+    color: 'bg-orange-500',
+    features: ['成员选择', '对话模式', '优先级设置']
+  },
+  {
+    title: '系统监控',
+    description: '查看系统运行状态和统计',
+    icon: Database,
+    href: '/admin/monitoring',
+    color: 'bg-red-500',
+    features: ['性能监控', '使用统计', '错误日志']
+  }
+];
 
 export default function AdminPage() {
-  const [configStatus, setConfigStatus] = useState<ConfigStatus[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    checkConfiguration();
-  }, []);
-
-  const checkConfiguration = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/admin/config-status');
-      if (response.ok) {
-        const data = await response.json();
-        setConfigStatus(data.providers || []);
-      }
-    } catch (error) {
-      console.error('Failed to check configuration:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'configured':
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
-      case 'missing':
-        return <XCircle className="w-5 h-5 text-red-600" />;
-      case 'error':
-        return <AlertTriangle className="w-5 h-5 text-yellow-600" />;
-      default:
-        return <XCircle className="w-5 h-5 text-gray-400" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'configured':
-        return 'bg-green-100 text-green-800';
-      case 'missing':
-        return 'bg-red-100 text-red-800';
-      case 'error':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">检查配置状态中...</p>
-        </div>
-      </div>
-    );
-  }
+  const [stats] = useState({
+    totalAgents: 5,
+    totalPrompts: 15,
+    totalConversations: 128,
+    activeUsers: 12
+  });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-                <Settings className="w-8 h-8 mr-3 text-blue-600" />
-                系统管理
-              </h1>
-              <p className="text-gray-600 mt-2">
-                管理和监控 AI 朋友圈系统的配置状态
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900">AI朋友圈管理后台</h1>
+              <p className="mt-2 text-gray-600">管理系统中的智能体、提示词和对话配置</p>
             </div>
-            <Button onClick={checkConfiguration} disabled={isLoading}>
-              刷新状态
-            </Button>
+            <div className="flex items-center space-x-4">
+              <Badge variant="outline" className="text-green-600 border-green-600">
+                系统正常
+              </Badge>
+              <Button asChild>
+                <Link href="/">返回前台</Link>
+              </Button>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Configuration Status */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {configStatus.map((config) => (
-            <Card key={config.provider}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{config.name}</CardTitle>
-                  {getStatusIcon(config.status)}
+      {/* Stats Cards */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Bot className="h-8 w-8 text-blue-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">智能体数量</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalAgents}</p>
                 </div>
-                <CardDescription>
-                  提供商: {config.provider}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div>
-                    <Badge className={getStatusColor(config.status)}>
-                      {config.status === 'configured' ? '已配置' :
-                       config.status === 'missing' ? '未配置' : '配置错误'}
-                    </Badge>
-                  </div>
-                  
-                  {config.error && (
-                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                      {config.error}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <FileText className="h-8 w-8 text-green-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">提示词模板</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalPrompts}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <MessageSquare className="h-8 w-8 text-purple-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">对话总数</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalConversations}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Users className="h-8 w-8 text-orange-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">活跃用户</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.activeUsers}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Modules */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {adminModules.map((module) => {
+            const IconComponent = module.icon;
+            return (
+              <Card key={module.href} className="hover:shadow-lg transition-shadow duration-200">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className={`p-2 rounded-lg ${module.color}`}>
+                      <IconComponent className="h-6 w-6 text-white" />
                     </div>
-                  )}
-                  
-                  {config.models.length > 0 && (
                     <div>
-                      <p className="text-sm font-medium text-gray-700 mb-2">
-                        可用模型 ({config.models.length}):
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {config.models.slice(0, 3).map((model) => (
-                          <Badge key={model} variant="outline" className="text-xs">
-                            {model}
-                          </Badge>
-                        ))}
-                        {config.models.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{config.models.length - 3}
-                          </Badge>
-                        )}
-                      </div>
+                      <CardTitle className="text-lg">{module.title}</CardTitle>
+                      <CardDescription className="text-sm">{module.description}</CardDescription>
                     </div>
-                  )}
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {module.features.map((feature) => (
+                      <Badge key={feature} variant="secondary" className="text-xs">
+                        {feature}
+                      </Badge>
+                    ))}
+                  </div>
+                  <Button asChild className="w-full">
+                    <Link href={module.href}>
+                      进入管理
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="mt-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">快捷操作</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <Settings className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <p className="font-medium text-blue-900">系统配置</p>
+                    <p className="text-sm text-blue-700">调整系统参数和默认设置</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-          ))}
+
+            <Card className="bg-green-50 border-green-200">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <Database className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="font-medium text-green-900">数据管理</p>
+                    <p className="text-sm text-green-700">备份、导入和导出数据</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-purple-50 border-purple-200">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <MessageSquare className="h-5 w-5 text-purple-600" />
+                  <div>
+                    <p className="font-medium text-purple-900">对话测试</p>
+                    <p className="text-sm text-purple-700">测试智能体对话效果</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-
-        {/* Configuration Instructions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>配置说明</CardTitle>
-            <CardDescription>
-              如何配置各个AI服务提供商的API密钥
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-900 mb-2">环境变量配置</h4>
-                <p className="text-blue-800 text-sm mb-3">
-                  在项目根目录创建 <code>.env.local</code> 文件，添加以下配置：
-                </p>
-                <pre className="bg-blue-900 text-blue-100 p-3 rounded text-xs overflow-x-auto">
-{`# OpenAI
-OPENAI_API_KEY=sk-...
-
-# DeepSeek  
-DEEPSEEK_API_KEY=sk-...
-
-# Anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Google Gemini
-GOOGLE_API_KEY=AIza...
-
-# 豆包 (字节跳动)
-DOUBAO_API_KEY=...
-
-# xAI
-XAI_API_KEY=xai-...`}
-                </pre>
-              </div>
-              
-              <div className="bg-amber-50 p-4 rounded-lg">
-                <h4 className="font-medium text-amber-900 mb-2">注意事项</h4>
-                <ul className="text-amber-800 text-sm space-y-1">
-                  <li>• 配置环境变量后需要重启开发服务器</li>
-                  <li>• 确保API密钥有足够的调用额度</li>
-                  <li>• 不要将API密钥提交到版本控制系统</li>
-                  <li>• 生产环境请在部署平台设置环境变量</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

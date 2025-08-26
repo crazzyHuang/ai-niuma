@@ -15,6 +15,8 @@ export interface FlowDefinition {
   name: string;
   mode: string;
   steps: string[];
+  randomOrder?: boolean;
+  dynamic?: boolean;
 }
 
 /**

@@ -11,9 +11,16 @@ model User {
   id            String         @id @default(cuid())
   email         String         @unique
   name          String?
+  role          String         @default("user") // user | admin
   plan          String         @default("free")
   createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   conversations Conversation[]
+  createdAgents Agent[]
+  createdPrompts PromptTemplate[]
+  createdProviders LLMProvider[]
+  createdGroups ChatGroup[]
+  createdFlows Flow[]
 }
 
 model Conversation {
@@ -21,9 +28,12 @@ model Conversation {
   userId      String
   user        User         @relation(fields: [userId], references: [id])
   title       String
-  mode        String // empathy | plan | compare | study | code ...
+  mode        String // smart | natural | empathy | analysis | complete | quick
+  groupId     String?      // 关联的群聊配置
+  group       ChatGroup?   @relation(fields: [groupId], references: [id])
   budgetCents Int          @default(500)
   createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   messages    Message[]
   deployments Deployment[]
 }
@@ -41,6 +51,7 @@ model Message {
   conv      Conversation @relation(fields: [convId], references: [id])
 }
 
+// 保留原有Agent表结构，添加新字段
 model Agent {
   id       String  @id @default(cuid())
   name     String
@@ -49,16 +60,130 @@ model Agent {
   order    Int
   prompt   String
   enabled  Boolean @default(true)
+
+  // 新增字段
+  description   String?
+  avatar        String?
+  color         String          @default("#3B82F6")
+  temperature   Float           @default(0.8)
+  maxTokens     Int             @default(1000)
+  createdBy     String?         // 可为空，兼容现有数据
+  updatedAt     DateTime        @default(now()) @updatedAt
+  creator       User?           @relation(fields: [createdBy], references: [id])
+  modelId       String?         // 关联的模型ID
+  model         LLMModel?       @relation(fields: [modelId], references: [id])
+  groupMembers  ChatGroupMember[]
+  personalPrompts AgentPrompt[]
 }
 
+// 保留原有Flow表，添加新字段
 model Flow {
   id      String  @id @default(cuid())
   name    String
   mode    String  @unique
   steps   Json // [{roleTag, provider, maxTokens, limitChars,...}]
   enabled Boolean @default(true)
+
+  // 新增字段
+  description String?
+  createdBy   String?
+  creator     User?           @relation(fields: [createdBy], references: [id])
+  updatedAt   DateTime        @default(now()) @updatedAt
+  randomOrder Boolean         @default(false)
+  dynamic     Boolean         @default(false)
 }
 
+// 新增的表
+model LLMProvider {
+  id          String   @id @default(cuid())
+  name        String   // 显示名称，如 "DeepSeek"
+  code        String   @unique // 代码标识，如 "deepseek"
+  baseUrl     String   // API基础URL
+  apiKey      String   // API密钥（加密存储）
+  isActive    Boolean  @default(true)
+  createdBy   String
+  creator     User     @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  models      LLMModel[] // 支持多个模型
+  agents      Agent[]
+}
+
+// LLM模型表
+model LLMModel {
+  id          String      @id @default(cuid())
+  name        String      // 显示名称，如 "DeepSeek-V3.1"
+  code        String      // 模型代码，如 "deepseek-ai/DeepSeek-V3.1"
+  providerId  String
+  provider    LLMProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  description String?     // 模型描述
+  contextLength Int       // 上下文长度
+  pricing      Json?      // 价格信息 {"input": 0.5, "output": 1.5}
+  capabilities String[]   // 能力标签 ["chat", "reasoning", "vision"]
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  agents      Agent[]
+
+  @@unique([providerId, code])
+}
+
+model PromptTemplate {
+  id          String      @id @default(cuid())
+  name        String      // 模板名称
+  category    String      // 分类：common | empathy | practical | creative | analytical
+  content     String      // 提示词内容
+  description String?     // 描述
+  tags        String[]    // 标签数组
+  isPublic    Boolean     @default(false) // 是否公开
+  createdBy   String
+  creator     User        @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  agents      AgentPrompt[]
+}
+
+model AgentPrompt {
+  id        String        @id @default(cuid())
+  agentId   String
+  agent     Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  promptId  String
+  prompt    PromptTemplate @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  order     Int           @default(0) // 提示词顺序
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+
+  @@unique([agentId, promptId])
+}
+
+model ChatGroup {
+  id          String           @id @default(cuid())
+  name        String           // 群聊名称
+  description String?          // 描述
+  mode        String           @default("smart") // smart | natural | fixed
+  isActive    Boolean          @default(true)
+  createdBy   String
+  creator     User             @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  members     ChatGroupMember[]
+  conversations Conversation[]
+}
+
+model ChatGroupMember {
+  id       String     @id @default(cuid())
+  groupId  String
+  group    ChatGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  agentId  String
+  agent    Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  order    Int        @default(0) // 发言顺序
+  priority Int        @default(5) // 优先级 1-10
+  createdAt DateTime  @default(now())
+
+  @@unique([groupId, agentId])
+}
+
+// 工件表（保留）
 model Artifact {
   id     String @id @default(cuid())
   convId String
@@ -67,6 +192,7 @@ model Artifact {
   meta   Json?
 }
 
+// 部署表（保留）
 model Deployment {
   id        String       @id @default(cuid())
   convId    String

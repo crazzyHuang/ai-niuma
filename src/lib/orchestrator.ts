@@ -146,7 +146,7 @@ export class Orchestrator {
               step: roleTag,
               content: response.content,
               tokens: response.usage.totalTokens,
-              costCents: this.calculateCost(response),
+              costCents: this.calculateCost(response, llmConfig.provider, response.model),
             },
           });
 
@@ -192,6 +192,152 @@ export class Orchestrator {
   }
 
   /**
+   * 运行流式编排 (微信群聊模式，支持实时显示)
+   */
+  static async runStreamOrchestration(
+    conversationId: string,
+    userMessageContent: string,
+    onEvent: (event: any) => void
+  ): Promise<void> {
+    try {
+      console.log('🎭 开始流式编排:', { conversationId, content: userMessageContent.slice(0, 50) });
+
+      // 获取对话信息
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+      });
+
+      if (!conversation) {
+        throw new Error('对话不存在');
+      }
+
+      // 获取流程配置
+      let steps: string[] = this.selectAgentsDynamically(conversation.mode, userMessageContent);
+
+      console.log('📋 智能选择智能体:', steps);
+
+      // 构建对话上下文
+      let conversationContext = `用户说: ${userMessageContent}\n\n`;
+
+      // 执行每个步骤
+      for (const roleTag of steps) {
+        console.log(`🎭 执行Agent: ${roleTag}`);
+
+        try {
+          // 1. 发送步骤开始事件
+          onEvent({ type: 'step_started', step: roleTag });
+
+          // 2. 获取智能体配置
+          const { agent, llmConfig } = AgentConfigManager.getAgentConfig(roleTag);
+          console.log(`⚙️ Agent配置 [${roleTag}]:`, {
+            name: agent.name,
+            temperature: agent.temperature,
+            provider: llmConfig.provider,
+            model: llmConfig.model
+          });
+
+          // 3. 构建消息历史 - 包含完整的对话上下文
+          const messages: LLMMessage[] = [
+            {
+              role: 'system',
+              content: `${agent.systemPrompt}\n\n对话上下文：\n${conversationContext}`,
+            },
+            {
+              role: 'user',
+              content: `请作为${agent.name}，基于上面的对话上下文，给出你的回应。`,
+            },
+          ];
+
+          // 4. 调用LLM服务进行流式对话
+          console.log(`🚀 开始LLM调用 [${roleTag}] (流式)`);
+          let fullResponse = '';
+          let chunkCount = 0;
+
+          const response = await llmService.streamChat(
+            llmConfig,
+            messages,
+            (chunk: LLMStreamChunk) => {
+              if (!chunk.isComplete && chunk.content) {
+                chunkCount++;
+                fullResponse += chunk.content;
+                console.log(`📝 [${roleTag}] 块 #${chunkCount}: "${chunk.content}"`);
+                onEvent({
+                  type: 'ai_chunk',
+                  text: chunk.content,
+                  agent: roleTag
+                });
+              }
+            }
+          );
+
+          console.log(`✅ LLM调用完成 [${roleTag}], 总块数: ${chunkCount}, 内容长度: ${response.content.length}`);
+
+          // 5. 保存AI消息到数据库
+          const aiMessage = await prisma.message.create({
+            data: {
+              convId: conversationId,
+              role: 'ai',
+              agentId: roleTag,
+              step: roleTag,
+              content: response.content,
+              tokens: response.usage.totalTokens,
+              costCents: this.calculateCost(response, llmConfig.provider, response.model),
+            },
+          });
+
+          // 6. 发送消息完成事件
+          onEvent({
+            type: 'ai_message_completed',
+            messageId: aiMessage.id,
+            usage: response.usage,
+            agent: roleTag,
+            content: response.content, // Include full content
+          });
+
+          // 7. 更新对话上下文，供下一个agent使用
+          conversationContext += `${agent.name}: ${response.content}\n\n`;
+
+        } catch (stepError) {
+          console.error(`Error in step ${roleTag}:`, stepError);
+
+          // 发送步骤失败事件
+          onEvent({
+            type: 'step_failed',
+            step: roleTag,
+            error: stepError instanceof Error ? stepError.message : 'Unknown error',
+          });
+
+          // 创建错误消息
+          const errorMessage = await prisma.message.create({
+            data: {
+              convId: conversationId,
+              role: 'ai',
+              content: `抱歉，${roleTag} 处理时出现错误`,
+              agentId: roleTag,
+              step: roleTag,
+              tokens: 0,
+              costCents: 0,
+            },
+          });
+
+          // 继续执行下一个Agent
+          conversationContext += `系统消息: ${roleTag} 处理时出现错误\n\n`;
+        }
+      }
+
+      // 发送编排完成事件
+      onEvent({ type: 'orchestration_completed' });
+
+    } catch (error) {
+      console.error('流式编排错误:', error);
+      onEvent({
+        type: 'orchestration_failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  /**
    * 运行聊天编排 (非流式版本，微信群聊模式)
    * 返回所有AI消息，一次性显示
    */
@@ -212,28 +358,8 @@ export class Orchestrator {
       }
 
       // 获取流程配置
-      let steps: string[];
-      
-      // 检查是否是单一提供商模式
-      const useSingleProvider = process.env.USE_SINGLE_PROVIDER === 'true';
-      
-      if (useSingleProvider) {
-        const agentFlows = AgentConfigManager.getFlows();
-        const flow = agentFlows.find(f => f.mode === conversation.mode);
-        steps = flow ? flow.steps : ['EMPATHY', 'PRACTICAL'];
-        console.log('📋 使用单一提供商模式，步骤:', steps);
-      } else {
-        const flow = await prisma.flow.findUnique({
-          where: { mode: conversation.mode },
-        });
-        
-        if (!flow || !Array.isArray(flow.steps)) {
-          throw new Error('流程配置不存在');
-        }
-        
-        steps = (flow.steps as any[]).map(step => step.roleTag);
-        console.log('📋 使用多提供商模式，步骤:', steps);
-      }
+      let steps: string[] = this.selectAgentsDynamically(conversation.mode, userMessageContent);
+      console.log('📋 智能选择智能体:', steps);
 
       let previousSummary = userMessageContent;
       const aiMessages: any[] = [];
@@ -372,6 +498,157 @@ export class Orchestrator {
       role: msg.role as 'system' | 'user' | 'assistant',
       content: msg.content,
     }));
+  }
+
+  /**
+   * 智能选择智能体（根据用户情绪和问题类型）
+   */
+  private static selectAgentsDynamically(mode: string, userMessage: string): string[] {
+    // 分析用户情绪
+    const emotion = this.analyzeEmotion(userMessage);
+    const topic = this.analyzeTopic(userMessage);
+
+    console.log('🎯 用户分析:', { emotion, topic, mode });
+
+    // 检查是否是单一提供商模式
+    const useSingleProvider = process.env.USE_SINGLE_PROVIDER === 'true';
+
+    if (useSingleProvider) {
+      const agentFlows = AgentConfigManager.getAllFlows();
+      const flow = agentFlows.find((f: any) => f.mode === mode);
+
+      if (flow) {
+        let steps = [...flow.steps];
+
+        // 如果是natural模式，随机打乱顺序
+        if (flow.randomOrder) {
+          steps = this.shuffleArray(steps);
+        }
+
+        // 如果是smart模式，根据情绪和话题动态调整
+        if (flow.dynamic) {
+          steps = this.optimizeForEmotionAndTopic(steps, emotion, topic);
+        }
+
+        return steps;
+      }
+    }
+
+    // 默认回退策略
+    return this.getDefaultAgentSequence(emotion, topic);
+  }
+
+  /**
+   * 分析用户情绪
+   */
+  private static analyzeEmotion(message: string): 'positive' | 'negative' | 'neutral' {
+    const negativeWords = ['不开心', '难过', '烦', '累', '压力', '焦虑', '生气', '失望'];
+    const positiveWords = ['开心', '高兴', '快乐', '兴奋', '满意', '棒', '好'];
+
+    const lowerMessage = message.toLowerCase();
+
+    if (negativeWords.some(word => lowerMessage.includes(word))) {
+      return 'negative';
+    }
+    if (positiveWords.some(word => lowerMessage.includes(word))) {
+      return 'positive';
+    }
+    return 'neutral';
+  }
+
+  /**
+   * 分析用户话题
+   */
+  private static analyzeTopic(message: string): 'emotional' | 'practical' | 'creative' | 'general' {
+    const emotionalWords = ['心情', '感情', '感受', '情绪', '心理', '压力', '焦虑'];
+    const practicalWords = ['怎么做', '怎么办', '建议', '方法', '解决', '工作', '学习'];
+    const creativeWords = ['创意', '想法', '创新', '设计', '艺术', '灵感'];
+
+    const lowerMessage = message.toLowerCase();
+
+    if (emotionalWords.some(word => lowerMessage.includes(word))) {
+      return 'emotional';
+    }
+    if (practicalWords.some(word => lowerMessage.includes(word))) {
+      return 'practical';
+    }
+    if (creativeWords.some(word => lowerMessage.includes(word))) {
+      return 'creative';
+    }
+    return 'general';
+  }
+
+  /**
+   * 随机打乱数组
+   */
+  private static shuffleArray(array: string[]): string[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  /**
+   * 根据情绪和话题优化智能体顺序
+   */
+  private static optimizeForEmotionAndTopic(
+    steps: string[],
+    emotion: string,
+    topic: string
+  ): string[] {
+    let optimizedSteps = [...steps];
+
+    // 负面情绪优先安排共情者
+    if (emotion === 'negative') {
+      // 确保EMPATHY在前面
+      const empathyIndex = optimizedSteps.indexOf('EMPATHY');
+      if (empathyIndex > 0) {
+        optimizedSteps.splice(empathyIndex, 1);
+        optimizedSteps.unshift('EMPATHY');
+      }
+    }
+
+    // 实际问题优先安排实用建议者
+    if (topic === 'practical') {
+      const practicalIndex = optimizedSteps.indexOf('PRACTICAL');
+      if (practicalIndex > 1) {
+        optimizedSteps.splice(practicalIndex, 1);
+        optimizedSteps.splice(1, 0, 'PRACTICAL');
+      }
+    }
+
+    return optimizedSteps;
+  }
+
+  /**
+   * 默认智能体选择策略
+   */
+  private static getDefaultAgentSequence(emotion: string, topic: string): string[] {
+    // 基础组合
+    let sequence = ['EMPATHY', 'PRACTICAL', 'FOLLOWUP'];
+
+    // 根据情绪调整
+    if (emotion === 'negative') {
+      // 负面情绪多加关怀
+      sequence = ['EMPATHY', 'PRACTICAL', 'FOLLOWUP'];
+    } else if (emotion === 'positive') {
+      // 正面情绪可以更轻松
+      sequence = ['EMPATHY', 'CREATIVE', 'FOLLOWUP'];
+    }
+
+    // 根据话题调整
+    if (topic === 'creative') {
+      sequence.splice(1, 0, 'CREATIVE');
+    } else if (topic === 'practical') {
+      // 实用话题确保有PRACTICAL
+      if (!sequence.includes('PRACTICAL')) {
+        sequence.splice(1, 0, 'PRACTICAL');
+      }
+    }
+
+    return sequence;
   }
 
   /**
