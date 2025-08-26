@@ -74,6 +74,7 @@ model Agent {
   model         LLMModel?       @relation(fields: [modelId], references: [id])
   groupMembers  ChatGroupMember[]
   personalPrompts AgentPrompt[]
+  providers     LLMProvider[]
 }
 
 // 保留原有Flow表，添加新字段

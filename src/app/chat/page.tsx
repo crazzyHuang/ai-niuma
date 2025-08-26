@@ -9,7 +9,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, MessageCircle, Users, Search, ArrowLeft, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu } from 'lucide-react';
+import { Plus, MessageCircle, Users, Search, ArrowLeft, ArrowRight, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu, ChevronRight, X } from 'lucide-react';
 
 // 消息和流式数据接口
 interface Message {
@@ -47,7 +47,19 @@ function TypingIndicator() {
 }
 
 // 聊天界面组件
-function ChatInterface({ conversationId }: { conversationId: string }) {
+function ChatInterface({
+  conversationId,
+  isSidebarCollapsed,
+  onToggleSidebar,
+  selectedConversation,
+  onOpenGroupDrawer
+}: {
+  conversationId: string;
+  isSidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
+  selectedConversation: Conversation | null;
+  onOpenGroupDrawer: () => void;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -242,11 +254,18 @@ function ChatInterface({ conversationId }: { conversationId: string }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col h-full min-h-0">
       {/* 聊天头部 */}
-      <div className="bg-background border-b border-border px-3 py-2 flex items-center justify-between">
-        <button className="p-1 text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />
+      <div className="bg-background border-b border-border px-3 py-2 flex items-center justify-between flex-shrink-0">
+        <button
+          onClick={onToggleSidebar}
+          className="p-1 text-muted-foreground hover:text-foreground"
+        >
+          {isSidebarCollapsed ? (
+            <ArrowRight className="h-4 w-4" />
+          ) : (
+            <ArrowLeft className="h-4 w-4" />
+          )}
         </button>
         <div className="flex flex-col items-center">
           <h1 className="text-base font-medium">对话</h1>
@@ -256,14 +275,17 @@ function ChatInterface({ conversationId }: { conversationId: string }) {
             </span>
           )}
         </div>
-        <button className="p-1 text-muted-foreground hover:text-foreground">
+        <button
+          onClick={onOpenGroupDrawer}
+          className="p-1 text-muted-foreground hover:text-foreground"
+        >
           <MoreVertical className="h-4 w-4" />
         </button>
       </div>
 
       {/* 消息区域 */}
-      <ScrollArea className="flex-1 bg-background" ref={scrollAreaRef}>
-        <div className="p-2 space-y-2 min-h-full">
+      <ScrollArea className="flex-1 min-h-0 bg-background" ref={scrollAreaRef}>
+        <div className="p-2 space-y-2 h-full">
           {messages.length === 0 && !streamingMessage ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
@@ -376,7 +398,7 @@ function ChatInterface({ conversationId }: { conversationId: string }) {
       </ScrollArea>
 
       {/* 输入框区域 */}
-      <div className="bg-muted/30 border-t border-border px-2 py-2">
+      <div className="bg-muted/30 border-t border-border px-2 py-2 flex-shrink-0">
         <form onSubmit={handleSubmit} className="flex items-end space-x-2">
           <div className="flex-1 relative">
             <Input
@@ -431,6 +453,8 @@ interface Conversation {
         name: string;
         color: string;
         avatar?: string;
+        description?: string;
+        roleTag: string;
       };
     }>;
   };
@@ -456,6 +480,8 @@ export default function ChatPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isGroupDrawerOpen, setIsGroupDrawerOpen] = useState(false);
 
   // 加载对话列表
   useEffect(() => {
@@ -524,170 +550,279 @@ export default function ChatPage() {
     conv.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const selectedConversationData = conversations.find(conv => conv.id === selectedConversation) || null;
+
   return (
     <div className="min-h-screen bg-background/50 flex items-center justify-center p-4">
       <div className="w-full max-w-6xl h-[700px] bg-background rounded-xl shadow-lg overflow-hidden border border-border flex">
         {/* 左侧边栏 */}
-        <div className="w-72 border-r border-border flex flex-col bg-muted/5">
-        {/* 头部 */}
-        <div className="p-3 border-b border-border">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-lg font-semibold">AI 朋友圈</h1>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-1 h-8">
-                  <Plus className="h-3 w-3" />
-                  新建
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>创建新对话</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium">选择智能体</label>
-                    <div className="mt-2 grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                      {agents.map(agent => (
-                        <Card
-                          key={agent.id}
-                          className={`cursor-pointer transition-colors ${
-                            selectedAgents.includes(agent.id)
-                              ? 'ring-2 ring-primary bg-primary/5'
-                              : 'hover:bg-muted/50'
-                          }`}
-                          onClick={() => {
-                            setSelectedAgents(prev =>
-                              prev.includes(agent.id)
-                                ? prev.filter(id => id !== agent.id)
-                                : [...prev, agent.id]
-                            );
-                          }}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-8 w-8">
-                                <div
-                                  className="h-full w-full rounded-full flex items-center justify-center text-xs font-medium text-white"
-                                  style={{ backgroundColor: agent.color }}
-                                >
-                                  {agent.avatar || agent.name.slice(0, 1)}
-                                </div>
-                              </Avatar>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{agent.name}</p>
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {agent.description || agent.roleTag}
-                                </p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                  {selectedAgents.length > 1 && (
-                    <div>
-                      <label className="text-sm font-medium">群聊名称（可选）</label>
-                      <Input
-                        value={newGroupName}
-                        onChange={(e) => setNewGroupName(e.target.value)}
-                        placeholder="输入群聊名称"
-                        className="mt-1"
-                      />
-                    </div>
-                  )}
-                  <Button
-                    onClick={createConversation}
-                    disabled={selectedAgents.length === 0}
-                    className="w-full"
-                  >
-                    创建对话
+        <div className={`${isSidebarCollapsed ? 'w-16' : 'w-72'} border-r border-border flex flex-col bg-muted/5 transition-all duration-300`}>
+          {/* 头部 */}
+          <div className="p-3 border-b border-border">
+            <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} mb-3`}>
+              {!isSidebarCollapsed && <h1 className="text-lg font-semibold">AI 朋友圈</h1>}
+              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className={`${isSidebarCollapsed ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`}>
+                    <Plus className="h-4 w-4" />
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>创建新对话</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium">选择智能体</label>
+                      <div className="mt-2 grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                        {agents.map(agent => (
+                          <Card
+                            key={agent.id}
+                            className={`cursor-pointer transition-colors ${
+                              selectedAgents.includes(agent.id)
+                                ? 'ring-2 ring-primary bg-primary/5'
+                                : 'hover:bg-muted/50'
+                            }`}
+                            onClick={() => {
+                              setSelectedAgents(prev =>
+                                prev.includes(agent.id)
+                                  ? prev.filter(id => id !== agent.id)
+                                  : [...prev, agent.id]
+                              );
+                            }}
+                          >
+                            <CardContent className="p-3">
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-8 w-8">
+                                  <div
+                                    className="h-full w-full rounded-full flex items-center justify-center text-xs font-medium text-white"
+                                    style={{ backgroundColor: agent.color }}
+                                  >
+                                    {agent.avatar || agent.name.slice(0, 1)}
+                                  </div>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{agent.name}</p>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {agent.description || agent.roleTag}
+                                  </p>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                    {selectedAgents.length > 1 && (
+                      <div>
+                        <label className="text-sm font-medium">群聊名称（可选）</label>
+                        <Input
+                          value={newGroupName}
+                          onChange={(e) => setNewGroupName(e.target.value)}
+                          placeholder="输入群聊名称"
+                          className="mt-1"
+                        />
+                      </div>
+                    )}
+                    <Button
+                      onClick={createConversation}
+                      disabled={selectedAgents.length === 0}
+                      className="w-full"
+                    >
+                      创建对话
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* 搜索框 */}
+            {!isSidebarCollapsed && (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="搜索对话..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            )}
           </div>
 
-          {/* 搜索框 */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="搜索对话..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </div>
-
-        {/* 对话列表 */}
-        <ScrollArea className="flex-1">
-          <div className="p-1 space-y-1">
-            {filteredConversations.map(conversation => (
-              <Card
-                key={conversation.id}
-                className={`cursor-pointer transition-colors ${
-                  selectedConversation === conversation.id
-                    ? 'bg-primary/10 border-primary'
-                    : 'hover:bg-muted/50'
-                }`}
-                onClick={() => {
-                  setSelectedConversation(conversation.id);
-                }}
-              >
-                <CardContent className="p-2">
-                  <div className="flex items-start gap-2">
-                    <Avatar className="h-8 w-8">
+          {/* 对话列表 */}
+          <ScrollArea className="flex-1">
+            <div className="p-0 space-y-0">
+              {filteredConversations.map(conversation => (
+                <div
+                  key={conversation.id}
+                  className={`cursor-pointer transition-colors border-b border-border/50 px-3 py-2 ${
+                    selectedConversation === conversation.id
+                      ? 'bg-primary/10 border-primary/20'
+                      : 'hover:bg-muted/30'
+                  }`}
+                  onClick={() => {
+                    setSelectedConversation(conversation.id);
+                  }}
+                >
+                  <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-2'}`}>
+                    <Avatar className={`${isSidebarCollapsed ? 'h-8 w-8' : 'h-6 w-6'}`}>
                       {conversation.group ? (
                         <div className="h-full w-full rounded-full bg-primary/10 flex items-center justify-center">
-                          <Users className="h-4 w-4 text-primary" />
+                          <Users className={`${isSidebarCollapsed ? 'h-4 w-4' : 'h-3 w-3'} text-primary`} />
                         </div>
                       ) : (
                         <div className="h-full w-full rounded-full bg-muted flex items-center justify-center">
-                          <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                          <MessageCircle className={`${isSidebarCollapsed ? 'h-4 w-4' : 'h-3 w-3'} text-muted-foreground`} />
                         </div>
                       )}
                     </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{conversation.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(conversation.updatedAt).toLocaleDateString()}
-                      </p>
-                      {conversation.group && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <Badge variant="secondary" className="text-xs px-1 py-0">
-                            {conversation.group.members.length} 成员
-                          </Badge>
+                    {!isSidebarCollapsed && (
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{conversation.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(conversation.updatedAt).toLocaleDateString()}
+                          </p>
+                          {conversation.group && (
+                            <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
+                              {conversation.group.members.length} 成员
+                            </Badge>
+                          )}
                         </div>
-                      )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* 右侧聊天内容区域 */}
+        <div className="flex-1 flex flex-col">
+          {selectedConversation ? (
+            <ChatInterface
+              conversationId={selectedConversation}
+              isSidebarCollapsed={isSidebarCollapsed}
+              onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              selectedConversation={selectedConversationData}
+              onOpenGroupDrawer={() => setIsGroupDrawerOpen(true)}
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-8">
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
+                  <MessageCircle className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h2 className="text-2xl font-semibold">选择或创建对话</h2>
+                <p className="text-muted-foreground max-w-md">
+                  从左侧选择一个对话，或点击"新建"按钮创建新的对话
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 群成员抽屉栏 */}
+        <div className={`fixed top-0 right-0 h-full w-80 bg-background border-l border-border shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${
+          isGroupDrawerOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}>
+          {/* 抽屉头部 */}
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <h2 className="text-lg font-semibold">群聊管理</h2>
+            <button
+              onClick={() => setIsGroupDrawerOpen(false)}
+              className="p-1 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* 抽屉内容 */}
+          <div className="p-4 space-y-6 h-full overflow-y-auto">
+            {selectedConversationData?.group && (
+              <>
+                {/* 群信息 */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium">群信息</h3>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <div className="h-full w-full rounded-full bg-primary/10 flex items-center justify-center">
+                        <Users className="h-5 w-5 text-primary" />
+                      </div>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{selectedConversationData.group.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedConversationData.group.members.length} 成员
+                      </p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </ScrollArea>
-      </div>
+                </div>
 
-      {/* 右侧聊天内容区域 */}
-      <div className="flex-1 flex flex-col">
-        {selectedConversation ? (
-          <ChatInterface conversationId={selectedConversation} />
-        ) : (
-          <div className="flex-1 flex items-center justify-center p-8">
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
-                <MessageCircle className="h-8 w-8 text-muted-foreground" />
+                {/* 成员列表 */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium">成员</h3>
+                  <div className="space-y-2">
+                    {selectedConversationData.group.members.map((member, index) => (
+                      <div key={member.agent.id} className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          <div
+                            className="h-full w-full rounded-full flex items-center justify-center text-xs font-medium text-white"
+                            style={{ backgroundColor: member.agent.color }}
+                          >
+                            {member.agent.avatar || member.agent.name.slice(0, 1)}
+                          </div>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{member.agent.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {member.agent.description || member.agent.roleTag}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 群操作 */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-medium">操作</h3>
+                  <div className="space-y-2">
+                    <Button variant="outline" className="w-full justify-start">
+                      <Users className="h-4 w-4 mr-2" />
+                      邀请成员
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start">
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      修改群名称
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start text-destructive">
+                      <X className="h-4 w-4 mr-2" />
+                      退出群聊
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {!selectedConversationData?.group && (
+              <div className="text-center text-muted-foreground">
+                <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>这不是一个群聊</p>
               </div>
-              <h2 className="text-2xl font-semibold">选择或创建对话</h2>
-              <p className="text-muted-foreground max-w-md">
-                从左侧选择一个对话，或点击"新建"按钮创建新的对话
-              </p>
-            </div>
+            )}
           </div>
-        )}
         </div>
+
+        {/* 抽屉遮罩 */}
+        {isGroupDrawerOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={() => setIsGroupDrawerOpen(false)}
+          />
+        )}
       </div>
     </div>
   );
