@@ -2,6 +2,7 @@ import { LLMMessage, LLMStreamChunk } from '@/types/llm';
 import llmService from './llm-service';
 import LLMConfigManager from './llm-config';
 import { AgentConfigManager } from './agent-config-manager';
+import FlexibleChatManager from './flexible-chat-manager';
 import prisma from './db';
 
 /**
@@ -74,7 +75,8 @@ export class Orchestrator {
         steps = (flow.steps as any[]).map(step => step.roleTag);
       }
 
-      let previousSummary = userMessageContent;
+      // 构建群聊上下文，让每个agent都能看到完整对话
+      let groupChatContext = `用户: ${userMessageContent}\n\n`;
 
       // 执行每个步骤
       for (const roleTag of steps) {
@@ -105,7 +107,7 @@ export class Orchestrator {
             model: llmConfig.model
           });
 
-          // 4. 构建消息历史
+          // 4. 构建消息历史 - 使用完整群聊上下文
           const messages: LLMMessage[] = [
             {
               role: 'system',
@@ -113,7 +115,7 @@ export class Orchestrator {
             },
             {
               role: 'user',
-              content: previousSummary,
+              content: `【群聊记录】\n${groupChatContext}\n现在轮到你回复了，请保持自然的朋友语气，简短回应即可。`,
             },
           ];
 
@@ -157,8 +159,8 @@ export class Orchestrator {
             usage: response.usage,
           });
 
-          // 8. 更新摘要用于下一步
-          previousSummary = response.content;
+          // 8. 更新群聊上下文用于下一步
+          groupChatContext += `${agent.name}: ${response.content}\n\n`;
 
         } catch (stepError) {
           console.error(`Error in step ${roleTag}:`, stepError);
@@ -193,6 +195,7 @@ export class Orchestrator {
 
   /**
    * 运行流式编排 (微信群聊模式，支持实时显示)
+   * 支持灵活聊天模式 vs 固定模式
    */
   static async runStreamOrchestration(
     conversationId: string,
@@ -211,122 +214,32 @@ export class Orchestrator {
         throw new Error('对话不存在');
       }
 
-      // 获取流程配置
-      let steps: string[] = this.selectAgentsDynamically(conversation.mode, userMessageContent);
+      // 注意：用户消息已在API路由中保存，这里不需要重复保存
 
-      console.log('📋 智能选择智能体:', steps);
+      // 获取对话历史
+      const conversationHistory = `用户: ${userMessageContent}\n\n`;
 
-      // 构建对话上下文
-      let conversationContext = `用户说: ${userMessageContent}\n\n`;
-
-      // 执行每个步骤
-      for (const roleTag of steps) {
-        console.log(`🎭 执行Agent: ${roleTag}`);
-
-        try {
-          // 1. 发送步骤开始事件
-          onEvent({ type: 'step_started', step: roleTag });
-
-          // 2. 获取智能体配置
-          const { agent, llmConfig } = AgentConfigManager.getAgentConfig(roleTag);
-          console.log(`⚙️ Agent配置 [${roleTag}]:`, {
-            name: agent.name,
-            temperature: agent.temperature,
-            provider: llmConfig.provider,
-            model: llmConfig.model
-          });
-
-          // 3. 构建消息历史 - 包含完整的对话上下文
-          const messages: LLMMessage[] = [
-            {
-              role: 'system',
-              content: `${agent.systemPrompt}\n\n对话上下文：\n${conversationContext}`,
-            },
-            {
-              role: 'user',
-              content: `请作为${agent.name}，基于上面的对话上下文，给出你的回应。`,
-            },
-          ];
-
-          // 4. 调用LLM服务进行流式对话
-          console.log(`🚀 开始LLM调用 [${roleTag}] (流式)`);
-          let fullResponse = '';
-          let chunkCount = 0;
-
-          const response = await llmService.streamChat(
-            llmConfig,
-            messages,
-            (chunk: LLMStreamChunk) => {
-              if (!chunk.isComplete && chunk.content) {
-                chunkCount++;
-                fullResponse += chunk.content;
-                console.log(`📝 [${roleTag}] 块 #${chunkCount}: "${chunk.content}"`);
-                onEvent({
-                  type: 'ai_chunk',
-                  text: chunk.content,
-                  agent: roleTag
-                });
-              }
-            }
-          );
-
-          console.log(`✅ LLM调用完成 [${roleTag}], 总块数: ${chunkCount}, 内容长度: ${response.content.length}`);
-
-          // 5. 保存AI消息到数据库
-          const aiMessage = await prisma.message.create({
-            data: {
-              convId: conversationId,
-              role: 'ai',
-              agentId: roleTag,
-              step: roleTag,
-              content: response.content,
-              tokens: response.usage.totalTokens,
-              costCents: this.calculateCost(response, llmConfig.provider, response.model),
-            },
-          });
-
-          // 6. 发送消息完成事件
-          onEvent({
-            type: 'ai_message_completed',
-            messageId: aiMessage.id,
-            usage: response.usage,
-            agent: roleTag,
-            content: response.content, // Include full content
-          });
-
-          // 7. 更新对话上下文，供下一个agent使用
-          conversationContext += `${agent.name}: ${response.content}\n\n`;
-
-        } catch (stepError) {
-          console.error(`Error in step ${roleTag}:`, stepError);
-
-          // 发送步骤失败事件
-          onEvent({
-            type: 'step_failed',
-            step: roleTag,
-            error: stepError instanceof Error ? stepError.message : 'Unknown error',
-          });
-
-          // 创建错误消息
-          const errorMessage = await prisma.message.create({
-            data: {
-              convId: conversationId,
-              role: 'ai',
-              content: `抱歉，${roleTag} 处理时出现错误`,
-              agentId: roleTag,
-              step: roleTag,
-              tokens: 0,
-              costCents: 0,
-            },
-          });
-
-          // 继续执行下一个Agent
-          conversationContext += `系统消息: ${roleTag} 处理时出现错误\n\n`;
-        }
+      // 检查是否使用灵活聊天模式
+      const useFlexibleMode = conversation.mode === 'natural' || conversation.mode === 'smart';
+      
+      if (useFlexibleMode) {
+        console.log('🌟 使用灵活聊天模式');
+        return await FlexibleChatManager.runFlexibleChat(
+          conversationId,
+          userMessageContent,
+          conversationHistory,
+          onEvent
+        );
+      } else {
+        console.log('📋 使用传统固定模式');
+        return await this.runTraditionalChat(
+          conversationId,
+          userMessageContent,
+          conversationHistory,
+          onEvent,
+          conversation.mode
+        );
       }
-
-      // 发送编排完成事件
-      onEvent({ type: 'orchestration_completed' });
 
     } catch (error) {
       console.error('流式编排错误:', error);
@@ -335,6 +248,127 @@ export class Orchestrator {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
+  }
+
+  /**
+   * 传统固定模式聊天
+   */
+  private static async runTraditionalChat(
+    conversationId: string,
+    userMessageContent: string,
+    conversationHistory: string,
+    onEvent: (event: any) => void,
+    mode: string
+  ): Promise<void> {
+    // 获取流程配置
+    const steps: string[] = this.selectAgentsDynamically(mode, userMessageContent);
+    console.log('📋 传统模式选择智能体:', steps);
+
+    let conversationContext = conversationHistory;
+
+    // 执行每个步骤
+    for (const roleTag of steps) {
+      console.log(`🎭 执行传统Agent: ${roleTag}`);
+
+      try {
+        // 1. 发送步骤开始事件
+        onEvent({ type: 'step_started', step: roleTag });
+
+        // 2. 获取智能体配置
+        const { agent, llmConfig } = AgentConfigManager.getAgentConfig(roleTag);
+        console.log(`⚙️ Agent配置 [${roleTag}]:`, {
+          name: agent.name,
+          temperature: agent.temperature,
+          provider: llmConfig.provider,
+          model: llmConfig.model
+        });
+
+        // 3. 构建消息历史
+        const messages: LLMMessage[] = [
+          {
+            role: 'system',
+            content: agent.systemPrompt,
+          },
+          {
+            role: 'user',
+            content: `【群聊记录】\n${conversationContext}\n现在轮到你回复了，请保持自然的朋友语气，简短回应即可。`,
+          },
+        ];
+
+        // 4. 调用LLM服务进行流式对话
+        console.log(`🚀 开始LLM调用 [${roleTag}] (流式)`);
+
+        const response = await llmService.streamChat(
+          llmConfig,
+          messages,
+          (chunk: LLMStreamChunk) => {
+            if (!chunk.isComplete && chunk.content) {
+              onEvent({
+                type: 'ai_chunk',
+                text: chunk.content,
+                agent: roleTag
+              });
+            }
+          }
+        );
+
+        console.log(`✅ LLM调用完成 [${roleTag}], 内容长度: ${response.content.length}`);
+
+        // 5. 保存AI消息到数据库
+        const aiMessage = await prisma.message.create({
+          data: {
+            convId: conversationId,
+            role: 'ai',
+            agentId: roleTag,
+            step: roleTag,
+            content: response.content,
+            tokens: response.usage.totalTokens,
+            costCents: this.calculateCost(response, llmConfig.provider, response.model),
+          },
+        });
+
+        // 6. 发送消息完成事件
+        onEvent({
+          type: 'ai_message_completed',
+          messageId: aiMessage.id,
+          usage: response.usage,
+          agent: roleTag,
+          content: response.content,
+        });
+
+        // 7. 更新对话上下文，供下一个agent使用
+        conversationContext += `${agent.name}: ${response.content}\n\n`;
+
+      } catch (stepError) {
+        console.error(`Error in step ${roleTag}:`, stepError);
+
+        // 发送步骤失败事件
+        onEvent({
+          type: 'step_failed',
+          step: roleTag,
+          error: stepError instanceof Error ? stepError.message : 'Unknown error',
+        });
+
+        // 创建错误消息
+        const errorMessage = await prisma.message.create({
+          data: {
+            convId: conversationId,
+            role: 'ai',
+            content: `抱歉，${roleTag} 处理时出现错误`,
+            agentId: roleTag,
+            step: roleTag,
+            tokens: 0,
+            costCents: 0,
+          },
+        });
+
+        // 继续执行下一个Agent
+        conversationContext += `系统消息: ${roleTag} 处理时出现错误\n\n`;
+      }
+    }
+
+    // 发送编排完成事件
+    onEvent({ type: 'orchestration_completed' });
   }
 
   /**
@@ -361,7 +395,8 @@ export class Orchestrator {
       let steps: string[] = this.selectAgentsDynamically(conversation.mode, userMessageContent);
       console.log('📋 智能选择智能体:', steps);
 
-      let previousSummary = userMessageContent;
+      // 构建群聊上下文，让每个agent都能看到完整对话
+      let groupChatContext = `用户: ${userMessageContent}\n\n`;
       const aiMessages: any[] = [];
 
       // 执行每个步骤
@@ -386,7 +421,7 @@ export class Orchestrator {
             },
             {
               role: 'user',
-              content: previousSummary,
+              content: `【群聊记录】\n${groupChatContext}\n现在轮到你回复了，请保持自然的朋友语气，简短回应即可。`,
             },
           ];
 
@@ -417,8 +452,8 @@ export class Orchestrator {
           // 添加到结果数组
           aiMessages.push(aiMessage);
 
-          // 更新摘要用于下一个Agent
-          previousSummary = response.content;
+          // 更新群聊上下文用于下一个Agent
+          groupChatContext += `${agent.name}: ${response.content}\n\n`;
 
         } catch (error) {
           console.error(`❌ Agent ${roleTag} 执行失败:`, error);

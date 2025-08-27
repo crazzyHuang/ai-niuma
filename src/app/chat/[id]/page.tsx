@@ -85,9 +85,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setStreamingMessage(null);
     setCurrentAgent(null);
 
-    // Optimistically add user message
+    // Optimistically add user message with temporary ID
+    const tempId = `temp-user-${Date.now()}`;
     const userMessageObj: Message = {
-      id: `user-${Date.now()}`,
+      id: tempId,
       role: 'user',
       content: userMessage,
       timestamp: new Date()
@@ -112,7 +113,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
           switch (data.type) {
             case 'user_message':
-              // User message already added
+              // Replace temporary user message with real one from database
+              setMessages(prev => prev.map(msg => 
+                msg.id.startsWith('temp-user-') && msg.content === userMessage
+                  ? { ...msg, id: data.id, timestamp: new Date(data.timestamp) }
+                  : msg
+              ));
               break;
 
             case 'agent_start':
