@@ -306,55 +306,59 @@ function ChatInterface({
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in-0 slide-in-from-bottom-1 duration-300`}
+                  className={`mb-4 ${message.role === 'user' ? 'flex justify-end' : 'flex justify-start'} animate-in fade-in-0 slide-in-from-bottom-1 duration-300`}
                 >
-                  <div className={`flex items-end space-x-2 max-w-[85%] ${
-                    message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
+                  <div className={`flex flex-col max-w-[85%] ${
+                    message.role === 'user' ? 'items-end' : 'items-start'
                   }`}>
-                    {/* 头像 */}
-                    <Avatar className="h-8 w-8 mb-1">
-                      <div className={`h-full w-full rounded-full flex items-center justify-center text-xs font-medium ${
-                        message.role === 'user'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {message.role === 'user' ? '我' : '🤖'}
-                      </div>
-                    </Avatar>
-
-                    {/* 消息气泡 */}
-                    <div className={`relative px-3 py-2 max-w-full ${
-                      message.role === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-l-lg rounded-tr-lg rounded-br-sm'
-                        : 'bg-muted text-foreground rounded-r-lg rounded-tl-lg rounded-bl-sm'
-                    }`}>
-                      {/* 气泡尾巴 */}
-                      <div className={`absolute bottom-0 w-0 h-0 ${
-                        message.role === 'user'
-                          ? 'right-0 border-l-[8px] border-l-primary border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent'
-                          : 'left-0 border-r-[8px] border-r-muted border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent'
-                      }`}></div>
-
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
-
-                      {/* 时间和代理标识 */}
-                      <div className={`mt-1 flex items-center justify-between ${
-                        message.role === 'user' ? 'flex-row-reverse' : ''
-                      }`}>
-                        <span className={`text-xs ${
-                          message.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                        }`}>
-                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {/* 智能体名字显示在顶部（微信风格） */}
+                    {message.agent && message.role === 'ai' && (
+                      <div className="mb-2 ml-10"> {/* 增加底部间距从 mb-1 到 mb-2 */}
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {message.agent}
                         </span>
-                        {message.agent && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full ml-2 ${
-                            message.role === 'user'
-                              ? 'bg-primary/20 text-primary-foreground'
-                              : 'bg-muted text-muted-foreground'
+                      </div>
+                    )}
+                    
+                    <div className={`flex items-end space-x-2 ${
+                      message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
+                    }`}>
+                      {/* 头像 */}
+                      <Avatar className="h-8 w-8 mb-1 mt-2"> {/* 添加 mt-2 让整个气泡区域往下移 */}
+                        <div className={`h-full w-full rounded-full flex items-center justify-center text-xs font-medium ${
+                          message.role === 'user'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {message.role === 'user' ? '我' : '🤖'}
+                        </div>
+                      </Avatar>
+
+                      {/* 消息气泡 */}
+                      <div className={`relative px-3 py-2 max-w-full ${
+                        message.role === 'user'
+                          ? 'bg-primary text-primary-foreground rounded-l-lg rounded-tr-lg rounded-br-sm'
+                          : 'bg-muted text-foreground rounded-r-lg rounded-tl-lg rounded-bl-sm'
+                      }`}>
+                        {/* 气泡尾巴 */}
+                        <div className={`absolute bottom-0 w-0 h-0 ${
+                          message.role === 'user'
+                            ? 'right-0 border-l-[8px] border-l-primary border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent'
+                            : 'left-0 border-r-[8px] border-r-muted border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent'
+                        }`}></div>
+
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+
+                        {/* 只显示时间 */}
+                        <div className={`mt-1 flex ${
+                          message.role === 'user' ? 'justify-end' : 'justify-start'
+                        }`}>
+                          <span className={`text-xs ${
+                            message.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
                           }`}>
-                            {message.agent}
+                            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
-                        )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -363,21 +367,29 @@ function ChatInterface({
 
               {/* 流式消息 */}
               {streamingMessage && (
-                <div className="flex justify-start animate-in fade-in-0 slide-in-from-bottom-2 duration-500">
-                  <div className="flex items-end space-x-2 max-w-[85%]">
-                    <Avatar className="h-8 w-8 mb-1 animate-in zoom-in-50 duration-300">
-                      <div className="h-full w-full rounded-full bg-muted flex items-center justify-center text-xs">
-                        🤖
-                      </div>
-                    </Avatar>
-                    <div className="relative bg-muted text-foreground rounded-r-lg rounded-tl-lg rounded-bl-sm px-3 py-2 animate-in slide-in-from-left-2 duration-300">
-                      <div className="absolute left-0 bottom-0 w-0 h-0 border-r-[8px] border-r-muted border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent"></div>
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{streamingMessage.content}</p>
-                      <div className="mt-1 flex items-center justify-between">
-                        <TypingIndicator />
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground ml-2">
+                <div className="mb-4 flex justify-start animate-in fade-in-0 slide-in-from-bottom-2 duration-500">
+                  <div className="flex flex-col max-w-[85%] items-start">
+                    {/* 智能体名字显示在顶部 */}
+                    {streamingMessage.agent && (
+                      <div className="mb-2 ml-10"> {/* 增加底部间距从 mb-1 到 mb-2 */}
+                        <span className="text-xs text-muted-foreground font-medium">
                           {streamingMessage.agent}
                         </span>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-end space-x-2">
+                      <Avatar className="h-8 w-8 mb-1 mt-2 animate-in zoom-in-50 duration-300"> {/* 添加 mt-2 */}
+                        <div className="h-full w-full rounded-full bg-muted flex items-center justify-center text-xs">
+                          🤖
+                        </div>
+                      </Avatar>
+                      <div className="relative bg-muted text-foreground rounded-r-lg rounded-tl-lg rounded-bl-sm px-3 py-2 animate-in slide-in-from-left-2 duration-300">
+                        <div className="absolute left-0 bottom-0 w-0 h-0 border-r-[8px] border-r-muted border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent"></div>
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{streamingMessage.content}</p>
+                        <div className="mt-1 flex justify-start">
+                          <TypingIndicator />
+                        </div>
                       </div>
                     </div>
                   </div>
