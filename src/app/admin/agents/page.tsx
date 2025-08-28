@@ -405,27 +405,20 @@ export default function AgentsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" asChild>
-                <Link href="/admin">← 返回管理后台</Link>
-              </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">智能体管理</h1>
-                <p className="text-gray-600">创建和管理AI智能体配置</p>
-              </div>
-            </div>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  新建智能体
-                </Button>
-              </DialogTrigger>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">智能体管理</h1>
+          <p className="mt-2 text-gray-600">创建和管理AI智能体配置</p>
+        </div>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="lg">
+              <Plus className="h-4 w-4 mr-2" />
+              新建智能体
+            </Button>
+          </DialogTrigger>
               <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
@@ -832,13 +825,10 @@ export default function AgentsPage() {
                 </div>
               </DialogContent>
             </Dialog>
-          </div>
-        </div>
       </div>
 
       {/* Agents Table */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card>
+      <Card>
           <CardHeader>
             <CardTitle>智能体列表</CardTitle>
             <CardDescription>
@@ -933,7 +923,6 @@ export default function AgentsPage() {
             )}
           </CardContent>
         </Card>
-      </div>
 
       {/* Edit Dialog */}
       {editingAgent && (

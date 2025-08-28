@@ -15,28 +15,30 @@ export default class ModelScopeAdapter extends OpenAIAdapter {
     ];
   }
 
-  // 重写 streamChat 以使用魔搭的端点
+  // 重写 streamChat 以使用数据库配置的端点
   async streamChat(
     config: LLMConfig,
     messages: LLMMessage[],
     onChunk: (chunk: LLMStreamChunk) => void
   ): Promise<LLMResponse> {
-    // 设置魔搭的兼容端点
+    // 使用数据库配置的baseUrl，如果没有则使用默认的ModelScope社区版端点
     const modifiedConfig = {
       ...config,
-      baseUrl: config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+      baseUrl: config.baseUrl || 'https://api-inference.modelscope.cn/v1'
     };
 
+    console.log(`🔧 [ModelScopeAdapter] Using baseUrl: ${modifiedConfig.baseUrl}`);
+    
     // 调用父类的 streamChat 方法
     return super.streamChat(modifiedConfig, messages, onChunk);
   }
 
-  // 重写 chat 以使用魔搭的端点
+  // 重写 chat 以使用数据库配置的端点
   async chat(config: LLMConfig, messages: LLMMessage[]): Promise<LLMResponse> {
-    // 设置魔搭的兼容端点
+    // 使用数据库配置的baseUrl，如果没有则使用默认的ModelScope社区版端点
     const modifiedConfig = {
       ...config,
-      baseUrl: config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+      baseUrl: config.baseUrl || 'https://api-inference.modelscope.cn/v1'
     };
 
     // 调用父类的 chat 方法

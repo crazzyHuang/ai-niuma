@@ -68,41 +68,42 @@ export async function GET(
                     })}\n\n`);
                     break;
 
-                  case 'ai_chunk':
+                  case 'agent_chunk': // FlexibleChatManager sends 'agent_chunk', not 'ai_chunk'
                     controller.enqueue(`data: ${JSON.stringify({
                       type: 'chunk',
                       agent: event.agent,
-                      content: event.text,
+                      content: event.content, // FlexibleChatManager sends 'content', not 'text'
                       timestamp: new Date(),
                     })}\n\n`);
                     break;
 
-                  case 'ai_message_completed':
-                    // Send the complete message content along with completion event
+                  case 'agent_complete': // FlexibleChatManager sends 'agent_complete'
                     controller.enqueue(`data: ${JSON.stringify({
                       type: 'agent_complete',
                       agent: event.agent,
-                      messageId: event.messageId,
-                      usage: event.usage,
-                      fullContent: event.content, // Add full content
+                      content: event.content, // FlexibleChatManager includes full content
                       timestamp: new Date(),
                     })}\n\n`);
                     break;
 
-                  case 'orchestration_completed':
+                  case 'conversation_complete': // FlexibleChatManager sends 'conversation_complete'
                     controller.enqueue(`data: ${JSON.stringify({
                       type: 'conversation_complete',
                       timestamp: new Date(),
                     })}\n\n`);
                     break;
 
-                  case 'step_failed':
+                  case 'agent_error': // FlexibleChatManager sends 'agent_error'
                     controller.enqueue(`data: ${JSON.stringify({
                       type: 'agent_error',
-                      agent: event.step,
+                      agent: event.agent, // FlexibleChatManager sends 'agent', not 'step'
                       error: event.error,
                       timestamp: new Date(),
                     })}\n\n`);
+                    break;
+                    
+                  default:
+                    console.log('⚠️ Unhandled event type:', event.type, event);
                     break;
                 }
               } catch (error) {

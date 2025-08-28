@@ -160,7 +160,7 @@ Development workflow:
 
 ## Important Notes
 
-- The project uses **pnpm** as package manager
+- The project uses **pnpm** as package manager - ALWAYS use pnpm for installing packages, not npm or yarn
 - Development uses single ModelScope provider, production supports multiple
 - Turbopack is enabled for faster development builds
 - Agent personalities are carefully crafted for natural conversation flow

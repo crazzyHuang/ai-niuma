@@ -10,6 +10,7 @@ datasource db {
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
+  password      String         // 加密后的密码
   name          String?
   role          String         @default("user") // user | admin
   plan          String         @default("free")
@@ -24,18 +25,19 @@ model User {
 }
 
 model Conversation {
-  id          String       @id @default(cuid())
-  userId      String
-  user        User         @relation(fields: [userId], references: [id])
-  title       String
-  mode        String // smart | natural | empathy | analysis | complete | quick
-  groupId     String?      // 关联的群聊配置
-  group       ChatGroup?   @relation(fields: [groupId], references: [id])
-  budgetCents Int          @default(500)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  messages    Message[]
-  deployments Deployment[]
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  title          String
+  mode           String // smart | natural | empathy | analysis | complete | quick
+  selectedAgents Json?        // 用户选择的智能体ID数组
+  groupId        String?      // 关联的群聊配置
+  group          ChatGroup?   @relation(fields: [groupId], references: [id])
+  budgetCents    Int          @default(500)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  messages       Message[]
+  deployments    Deployment[]
 }
 
 model Message {
@@ -119,6 +121,7 @@ model LLMModel {
   provider    LLMProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
   description String?     // 模型描述
   contextLength Int       // 上下文长度
+  maxTokens   Int         @default(4096) // 最大输出token数
   pricing      Json?      // 价格信息 {"input": 0.5, "output": 1.5}
   capabilities String[]   // 能力标签 ["chat", "reasoning", "vision"]
   isActive    Boolean     @default(true)

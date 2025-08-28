@@ -13,7 +13,7 @@ export async function GET() {
       SELECT 
         a.id, a.name, a."roleTag", a.description, a.avatar, a.color,
         a.temperature, a."maxTokens", a.prompt, a.enabled, a."order",
-        a."updatedAt", a.provider, a."llmProviderId", a."modelId",
+        a."updatedAt", a.provider, a."modelId",
         u.id as creator_id, u.name as creator_name, u.email as creator_email,
         m.id as model_id, m.name as model_name, m.code as model_code,
         m."contextLength", m."maxTokens" as model_max_tokens, m.capabilities,
@@ -43,7 +43,6 @@ export async function GET() {
         createdAt: agent.updatedAt || new Date(),
         updatedAt: agent.updatedAt,
         provider: agent.provider,
-        llmProviderId: agent.llmProviderId,
         modelId: agent.modelId,
         model: agent.model_id ? {
           id: agent.model_id,

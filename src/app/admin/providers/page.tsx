@@ -82,11 +82,13 @@ export default function ProvidersPage() {
   const [expandedProviders, setExpandedProviders] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [showApiKey, setShowApiKey] = useState(false);
   
   const [providerFormData, setProviderFormData] = useState({
     name: '',
     code: '',
     baseUrl: '',
+    apiKey: '',
     isActive: true
   });
 
@@ -221,6 +223,9 @@ export default function ProvidersPage() {
     if (!providerFormData.baseUrl.trim()) {
       newErrors.baseUrl = 'API基础URL不能为空';
     }
+    if (!providerFormData.apiKey.trim()) {
+      newErrors.apiKey = 'API密钥不能为空';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -251,6 +256,7 @@ export default function ProvidersPage() {
       name: '',
       code: '',
       baseUrl: '',
+      apiKey: '',
       isActive: true
     });
     setErrors({});
@@ -273,6 +279,7 @@ export default function ProvidersPage() {
       name: template.name,
       code: template.code,
       baseUrl: template.baseUrl,
+      apiKey: '',
       isActive: true
     });
   };
@@ -294,27 +301,20 @@ export default function ProvidersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" asChild>
-                <Link href="/admin">← 返回管理后台</Link>
-              </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">LLM提供商管理</h1>
-                <p className="text-gray-600">配置AI模型提供商和管理模型列表</p>
-              </div>
-            </div>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  新增提供商
-                </Button>
-              </DialogTrigger>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">LLM提供商管理</h1>
+          <p className="mt-2 text-gray-600">配置AI模型提供商和管理模型列表</p>
+        </div>
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button size="lg">
+              <Plus className="h-4 w-4 mr-2" />
+              新增提供商
+            </Button>
+          </DialogTrigger>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>添加LLM提供商</DialogTitle>
@@ -386,6 +386,36 @@ export default function ProvidersPage() {
                     )}
                   </div>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey">API密钥</Label>
+                    <div className="relative">
+                      <Input
+                        id="apiKey"
+                        type={showApiKey ? "text" : "password"}
+                        value={providerFormData.apiKey}
+                        onChange={(e) => setProviderFormData({...providerFormData, apiKey: e.target.value})}
+                        placeholder="请输入API密钥"
+                        className={`pr-10 ${errors.apiKey ? 'border-red-500' : ''}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                      >
+                        {showApiKey ? (
+                          <EyeOff className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-400" />
+                        )}
+                      </Button>
+                    </div>
+                    {errors.apiKey && (
+                      <p className="text-xs text-red-500">{errors.apiKey}</p>
+                    )}
+                  </div>
+
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="isActive"
@@ -415,13 +445,10 @@ export default function ProvidersPage() {
                 </div>
               </DialogContent>
             </Dialog>
-          </div>
-        </div>
       </div>
 
       {/* Providers List */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card>
+      <Card>
           <CardHeader>
             <CardTitle>提供商列表</CardTitle>
             <CardDescription>
@@ -689,7 +716,6 @@ export default function ProvidersPage() {
             )}
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }

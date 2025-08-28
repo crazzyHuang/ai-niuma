@@ -40,6 +40,14 @@ class LLMService {
     messages: LLMMessage[],
     onChunk: (chunk: LLMStreamChunk) => void
   ): Promise<LLMResponse> {
+    console.log(`🚀 [LLMService] streamChat called with config:`, {
+      provider: config.provider,
+      providerType: typeof config.provider,
+      model: config.model,
+      hasApiKey: !!config.apiKey,
+      baseURL: config.baseURL
+    });
+    
     const adapter = this.getAdapter(config.provider);
     
     // 验证配置

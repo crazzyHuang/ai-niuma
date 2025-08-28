@@ -1,16 +1,17 @@
 import llmService from './llm-service';
 import LLMConfigManager from './llm-config';
+import { AgentConfigManager } from './agent-config-manager';
 import { LLMMessage } from '@/types/llm';
 import prisma from './db';
-import flexibleFriends from '../../config/flexible-friends.json';
 
-interface Friend {
-  roleTag: string;
+interface Agent {
+  id: string;
   name: string;
-  basePersonality: string;
-  traits: string[];
-  topics: Record<string, string>;
-  responseStyles: string[];
+  roleTag: string;
+  prompt: string;
+  temperature: number;
+  color: string;
+  description: string | null;
 }
 
 interface ChatContext {
@@ -23,81 +24,69 @@ interface ChatContext {
 
 /**
  * 灵活聊天管理器
- * 让AI朋友们能够进行真实、多样化的对话
+ * 使用数据库中的智能体进行对话
  */
 export class FlexibleChatManager {
-  private static friends: Friend[] = flexibleFriends.friends as Friend[];
   
   /**
-   * 智能选择参与对话的朋友
+   * 根据用户选择的智能体ID获取对应的智能体
    */
-  static selectFriends(context: ChatContext): Friend[] {
-    const topicType = this.analyzeTopicType(context.userMessage);
-    const friendCount = this.decideFriendCount(context.userMessage);
-    
-    // 基于话题类型和随机性选择朋友
-    const availableFriends = [...this.friends];
-    const selectedFriends: Friend[] = [];
-    
-    // 确保至少有一个朋友适合当前话题
-    const topicMatchFriends = availableFriends.filter(friend => 
-      friend.topics[topicType] && friend.topics[topicType].length > 0
-    );
-    
-    if (topicMatchFriends.length > 0) {
-      const primaryFriend = topicMatchFriends[Math.floor(Math.random() * topicMatchFriends.length)];
-      selectedFriends.push(primaryFriend);
-      availableFriends.splice(availableFriends.indexOf(primaryFriend), 1);
+  static async getSelectedAgents(selectedAgentIds: string[]): Promise<Agent[]> {
+    if (!selectedAgentIds || selectedAgentIds.length === 0) {
+      // 如果没有选择特定智能体，随机选择一个
+      const agents = await prisma.agent.findMany({
+        where: { enabled: true },
+        orderBy: { order: 'asc' }
+      });
+      
+      if (agents.length === 0) {
+        throw new Error('没有可用的智能体');
+      }
+      
+      return [agents[Math.floor(Math.random() * agents.length)]];
     }
+
+    // 根据ID获取选定的智能体
+    const agents = await prisma.agent.findMany({
+      where: {
+        id: { in: selectedAgentIds },
+        enabled: true
+      },
+      orderBy: { order: 'asc' }
+    });
     
-    // 随机选择剩余的朋友
-    while (selectedFriends.length < friendCount && availableFriends.length > 0) {
-      const randomIndex = Math.floor(Math.random() * availableFriends.length);
-      selectedFriends.push(availableFriends[randomIndex]);
-      availableFriends.splice(randomIndex, 1);
-    }
-    
-    return selectedFriends;
+    return agents;
   }
   
   /**
-   * 为特定朋友生成动态系统提示词
+   * 为智能体生成对话系统提示词
    */
-  static async generateDynamicPrompt(
-    friend: Friend,
+  static async generateAgentPrompt(
+    agent: Agent,
     context: ChatContext,
     isFirstResponder: boolean,
     previousResponses: string[]
   ): Promise<string> {
-    const topicType = this.analyzeTopicType(context.userMessage);
     const currentMood = this.generateRandomMood();
     const timePersonality = this.getTimeBasedPersonality(context.timeOfDay);
-    
-    // 随机选择一个回应风格
-    const responseStyle = friend.responseStyles[Math.floor(Math.random() * friend.responseStyles.length)];
     
     // 分析对话氛围
     const conversationTone = this.analyzeConversationTone(previousResponses);
     
     const dynamicPrompt = `
-你是${friend.name}，${friend.basePersonality}。
+你是${agent.name}。
+
+${agent.prompt}
 
 【当前状态】
 - 时间：${context.timeOfDay}，${timePersonality}
 - 今天心情：${currentMood}
-- 话题类型：${topicType}
-- 你在这个话题上的特点：${friend.topics[topicType] || '可以随意聊聊'}
-
-【个性特征】
-${friend.traits.map(trait => `- ${trait}`).join('\n')}
 
 【当前对话情况】
 ${isFirstResponder ? '你是第一个看到消息的朋友，可以自然地回应。' : ''}
-${previousResponses.length > 0 ? `前面的朋友们已经说了：\n${previousResponses.join('\n')}\n你可以回应他们的话，或者从新角度回应用户。` : ''}
+${previousResponses.length > 0 ? `\n前面的朋友们已经说了：\n${previousResponses.join('\n')}\n你可以回应他们的话，或者从新角度回应用户。` : ''}
 
 【对话氛围】${conversationTone}
-
-【今天的回应倾向】${responseStyle}
 
 【重要要求】
 - 像真实朋友一样聊天，不要太刻意
@@ -110,8 +99,131 @@ ${previousResponses.length > 0 ? `前面的朋友们已经说了：\n${previousR
 
 记住：你是一个有血有肉的朋友，不是AI助手！
 `;
-
+    
     return dynamicPrompt;
+  }
+  
+  /**
+   * 运行灵活对话
+   */
+  static async runFlexibleChat(
+    conversationId: string,
+    userMessage: string,
+    conversationHistory: string,
+    onEvent: (event: any) => void
+  ): Promise<void> {
+    // 获取对话信息以获取用户选择的智能体
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId }
+    });
+    
+    const selectedAgentIds = conversation?.selectedAgents as string[] || [];
+    
+    const context: ChatContext = {
+      userMessage,
+      conversationHistory,
+      topicType: this.analyzeTopicType(userMessage),
+      timeOfDay: this.getCurrentTimeOfDay(),
+      mood: this.generateRandomMood()
+    };
+    
+    // 使用用户选择的智能体来选择智能体
+    const selectedAgents = await this.getSelectedAgents(selectedAgentIds);
+    console.log('🎭 选择的智能体们:', selectedAgents.map(a => a.name));
+    
+    const previousResponses: string[] = [];
+    let updatedHistory = conversationHistory;
+    
+    // 依次让智能体回应
+    for (let i = 0; i < selectedAgents.length; i++) {
+      const agent = selectedAgents[i];
+      const isFirstResponder = i === 0;
+      
+      try {
+        onEvent({ type: 'step_started', step: agent.roleTag });
+        
+        // 生成动态提示词
+        const dynamicPrompt = await this.generateAgentPrompt(
+          agent,
+          context,
+          isFirstResponder,
+          previousResponses
+        );
+        
+        console.log(`🚀 ${agent.name}开始回应...`);
+        
+        const messages: LLMMessage[] = [
+          { role: 'system', content: dynamicPrompt },
+          { role: 'user', content: `【群聊记录】\n${updatedHistory}\n\n现在轮到你回复了，请保持自然的朋友语气。` }
+        ];
+
+        console.log(`🚀 ${agent.name}开始LLM调用...`);
+        
+        // 获取Agent的LLM配置
+        const { agent: agentConfig, llmConfig } = await AgentConfigManager.getAgentConfig(agent.roleTag);
+        
+        // 使用Agent的具体配置
+        const finalConfig = {
+          ...llmConfig,
+          temperature: agent.temperature || llmConfig.temperature || 1.0,
+          maxTokens: 150 // 保持短回复
+        };
+        
+        let fullContent = '';
+        
+        await llmService.streamChat(
+          finalConfig,
+          messages,
+          (chunk) => {
+            if (chunk.content) {
+              fullContent += chunk.content;
+              onEvent({
+                type: 'agent_chunk',
+                agent: agent.name,
+                content: chunk.content,
+                fullContent: fullContent
+              });
+            }
+          }
+        );
+        
+        console.log(`✅ ${agent.name}回应完成:`, fullContent);
+        
+        // 保存AI消息到数据库
+        await prisma.message.create({
+          data: {
+            convId: conversationId,
+            role: 'ai',
+            content: fullContent,
+            agentId: agent.id,
+            step: agent.roleTag,
+          },
+        });
+        
+        // 添加到上下文
+        previousResponses.push(`${agent.name}: ${fullContent}`);
+        updatedHistory += `${agent.name}: ${fullContent}\n\n`;
+        
+        onEvent({
+          type: 'agent_complete',
+          agent: agent.name,
+          content: fullContent,
+          step: agent.roleTag
+        });
+        
+      } catch (error) {
+        console.error(`❌ ${agent.name}回应失败:`, error);
+        onEvent({
+          type: 'agent_error',
+          agent: agent.name,
+          error: error instanceof Error ? error.message : '未知错误',
+          step: agent.roleTag
+        });
+      }
+    }
+    
+    console.log('🏁 所有智能体回应完成');
+    onEvent({ type: 'conversation_complete', message: '对话完成' });
   }
   
   /**
@@ -132,18 +244,6 @@ ${previousResponses.length > 0 ? `前面的朋友们已经说了：\n${previousR
   }
   
   /**
-   * 决定朋友数量
-   */
-  private static decideFriendCount(message: string): number {
-    // 根据消息复杂度决定朋友数量
-    if (message.length > 50) {
-      return Math.floor(Math.random() * 2) + 3; // 3-4个朋友
-    } else {
-      return Math.floor(Math.random() * 2) + 2; // 2-3个朋友
-    }
-  }
-  
-  /**
    * 生成随机心情
    */
   private static generateRandomMood(): string {
@@ -155,173 +255,51 @@ ${previousResponses.length > 0 ? `前面的朋友们已经说了：\n${previousR
       '今天特别开心，什么都觉得有趣',
       '比较平静，适合深入聊天',
       '有点想开玩笑的心情',
-      '今天比较感性，容易共鸣'
     ];
-    
     return moods[Math.floor(Math.random() * moods.length)];
   }
   
   /**
-   * 基于时间的个性调整
+   * 根据时间段生成个性描述
    */
   private static getTimeBasedPersonality(timeOfDay: string): string {
     const timePersonalities = {
-      morning: '刚起床不久，可能还有点迷糊但很温和',
-      afternoon: '一天中状态最好的时候，很有活力',
-      evening: '一天结束了，比较放松，适合深入聊天',
-      night: '有点累但还想聊会天，比较随性'
+      'morning': '一天中状态最好的时候，很有活力',
+      'afternoon': '一天中状态最好的时候，很有活力',
+      'evening': '有点累了，但还是想聊天',
+      'night': '有点困了，可能反应慢一点'
     };
-    
-    return timePersonalities[timeOfDay as keyof typeof timePersonalities] || '状态正常';
+    return timePersonalities[timeOfDay as keyof typeof timePersonalities] || timePersonalities.afternoon;
+  }
+  
+  /**
+   * 获取当前时间段
+   */
+  private static getCurrentTimeOfDay(): string {
+    const hour = new Date().getHours();
+    if (hour < 6) return 'night';
+    if (hour < 12) return 'morning';
+    if (hour < 18) return 'afternoon';
+    return 'evening';
   }
   
   /**
    * 分析对话氛围
    */
   private static analyzeConversationTone(previousResponses: string[]): string {
-    if (previousResponses.length === 0) return '刚开始聊天，氛围还在形成中';
+    if (previousResponses.length === 0) {
+      return '刚开始聊天，氛围还在形成中';
+    }
     
-    const allResponses = previousResponses.join(' ');
+    const allText = previousResponses.join(' ');
     
-    if (allResponses.includes('哈哈') || allResponses.includes('😂')) {
-      return '氛围比较轻松愉快，大家都在开心聊天';
-    } else if (allResponses.includes('抱抱') || allResponses.includes('理解')) {
-      return '氛围比较温暖，大家在互相关心';
-    } else if (allResponses.includes('建议') || allResponses.includes('可以')) {
-      return '大家在认真讨论问题，氛围比较务实';
+    if (allText.includes('哈哈') || allText.includes('😄')) {
+      return '对话氛围比较轻松愉快';
+    } else if (allText.includes('不过') || allText.includes('但是')) {
+      return '对话氛围比较理性，在讨论问题';
     } else {
       return '对话氛围比较平和，可以自由发挥';
     }
-  }
-  
-  /**
-   * 获取当前时间段
-   */
-  static getCurrentTimeOfDay(): string {
-    const hour = new Date().getHours();
-    
-    if (hour >= 6 && hour < 12) return 'morning';
-    if (hour >= 12 && hour < 18) return 'afternoon';
-    if (hour >= 18 && hour < 22) return 'evening';
-    return 'night';
-  }
-  
-  /**
-   * 运行灵活对话
-   */
-  static async runFlexibleChat(
-    conversationId: string,
-    userMessage: string,
-    conversationHistory: string,
-    onEvent: (event: any) => void
-  ): Promise<void> {
-    const context: ChatContext = {
-      userMessage,
-      conversationHistory,
-      topicType: this.analyzeTopicType(userMessage),
-      timeOfDay: this.getCurrentTimeOfDay(),
-      mood: this.generateRandomMood()
-    };
-    
-    // 选择参与对话的朋友
-    const selectedFriends = this.selectFriends(context);
-    console.log('🎭 选择的朋友们:', selectedFriends.map(f => f.name));
-    
-    const previousResponses: string[] = [];
-    let updatedHistory = conversationHistory;
-    
-    // 依次让朋友们回应
-    for (let i = 0; i < selectedFriends.length; i++) {
-      const friend = selectedFriends[i];
-      const isFirstResponder = i === 0;
-      
-      try {
-        onEvent({ type: 'step_started', step: friend.roleTag });
-        
-        // 生成动态提示词
-        const dynamicPrompt = await this.generateDynamicPrompt(
-          friend,
-          context,
-          isFirstResponder,
-          previousResponses
-        );
-        
-        // 构建消息
-        const messages: LLMMessage[] = [
-          {
-            role: 'system',
-            content: dynamicPrompt,
-          },
-          {
-            role: 'user',
-            content: `【群聊记录】\n${updatedHistory}\n\n现在轮到你回复了，请保持自然的朋友语气。`,
-          },
-        ];
-        
-        // 调用LLM
-        const llmConfig = LLMConfigManager.buildLLMConfig('modelscope', 'deepseek-ai/DeepSeek-V3.1', {
-          temperature: 0.8 + Math.random() * 0.4, // 增加随机性
-          maxTokens: 150,
-        });
-        
-        console.log(`🚀 ${friend.name}开始回应...`);
-        
-        const response = await llmService.streamChat(
-          llmConfig,
-          messages,
-          (chunk) => {
-            if (!chunk.isComplete && chunk.content) {
-              onEvent({
-                type: 'ai_chunk',
-                text: chunk.content,
-                agent: friend.roleTag
-              });
-            }
-          }
-        );
-        
-        console.log(`✅ ${friend.name}回应完成: ${response.content}`);
-        
-        // 保存消息到数据库
-        await prisma.message.create({
-          data: {
-            convId: conversationId,
-            role: 'ai',
-            agentId: friend.roleTag,
-            step: friend.roleTag,
-            content: response.content,
-            tokens: response.usage?.totalTokens || 0,
-            costCents: 0, // 暂时设为0，后续可以加入成本计算
-          },
-        });
-        
-        // 发送完成事件
-        onEvent({
-          type: 'ai_message_completed',
-          agent: friend.roleTag,
-          content: response.content,
-        });
-        
-        // 更新历史记录
-        previousResponses.push(`${friend.name}: ${response.content}`);
-        updatedHistory += `${friend.name}: ${response.content}\n\n`;
-        
-        // 随机延迟，模拟真实聊天
-        if (i < selectedFriends.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, Math.random() * 1000 + 500));
-        }
-        
-      } catch (error) {
-        console.error(`${friend.name}回应失败:`, error);
-        onEvent({
-          type: 'step_failed',
-          step: friend.roleTag,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
-    
-    onEvent({ type: 'orchestration_completed' });
   }
 }
 

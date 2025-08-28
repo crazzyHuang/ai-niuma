@@ -99,7 +99,7 @@ export class Orchestrator {
           onEvent({ type: 'ai_message_started', agent: roleTag, step: roleTag });
 
           // 3. 获取智能体配置
-          const { agent, llmConfig } = AgentConfigManager.getAgentConfig(roleTag);
+          const { agent, llmConfig } = await AgentConfigManager.getAgentConfig(roleTag);
           console.log(`⚙️ Agent配置 [${roleTag}]:`, {
             name: agent.name,
             temperature: agent.temperature,
@@ -275,7 +275,7 @@ export class Orchestrator {
         onEvent({ type: 'step_started', step: roleTag });
 
         // 2. 获取智能体配置
-        const { agent, llmConfig } = AgentConfigManager.getAgentConfig(roleTag);
+        const { agent, llmConfig } = await AgentConfigManager.getAgentConfig(roleTag);
         console.log(`⚙️ Agent配置 [${roleTag}]:`, {
           name: agent.name,
           temperature: agent.temperature,
@@ -405,7 +405,7 @@ export class Orchestrator {
 
         try {
           // 获取智能体配置
-          const { agent, llmConfig } = AgentConfigManager.getAgentConfig(roleTag);
+          const { agent, llmConfig } = await AgentConfigManager.getAgentConfig(roleTag);
           console.log(`⚙️ Agent配置 [${roleTag}]:`, {
             name: agent.name,
             temperature: agent.temperature,
@@ -693,7 +693,7 @@ export class Orchestrator {
     const errors: string[] = [];
 
     // 检查LLM配置
-    const llmValidation = LLMConfigManager.validateConfiguration();
+    const llmValidation = await LLMConfigManager.validateConfiguration();
     if (!llmValidation.isValid) {
       errors.push(...llmValidation.errors);
     }

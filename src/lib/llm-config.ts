@@ -1,49 +1,131 @@
 import { LLMConfig, LLMProvider, AgentConfig } from '@/types/llm';
-import providersConfig from '../../config/llm-providers.json';
+import prisma from './db';
 
 /**
- * LLM配置管理器
+ * LLM配置管理器 - 基于数据库配置
  */
 export class LLMConfigManager {
+
   /**
-   * 根据角色标签获取LLM配置
+   * 获取默认配置 - 从数据库获取
    */
-  static getConfigForAgent(roleTag: string): LLMConfig {
-    const defaultConfig = providersConfig.defaultConfigs[roleTag as keyof typeof providersConfig.defaultConfigs];
-    
-    if (!defaultConfig) {
-      // 如果没有配置，使用默认的共情配置
-      const fallback = providersConfig.defaultConfigs.empathy;
-      return this.buildLLMConfig(fallback.provider as LLMProvider, fallback.model, {
-        temperature: fallback.temperature,
-        maxTokens: fallback.maxTokens,
-      });
+  static async getConfig(): Promise<LLMConfig> {
+    // 获取第一个活跃的Provider和Model
+    const provider = await prisma.lLMProvider.findFirst({
+      where: { isActive: true },
+      include: {
+        models: {
+          where: { isActive: true },
+          take: 1
+        }
+      }
+    });
+
+    if (!provider || !provider.models[0]) {
+      throw new Error('No active LLM provider/model found in database');
     }
 
-    return this.buildLLMConfig(defaultConfig.provider as LLMProvider, defaultConfig.model, {
-      temperature: defaultConfig.temperature,
-      maxTokens: defaultConfig.maxTokens,
-    });
+    const model = provider.models[0];
+
+    return {
+      provider: provider.code as LLMProvider,
+      model: model.code,
+      apiKey: provider.apiKey,
+      baseURL: provider.baseUrl,
+      temperature: parseFloat(process.env.DEFAULT_LLM_TEMPERATURE || '0.8'),
+      maxTokens: model.maxTokens || 2000,
+      timeout: parseInt(process.env.DEFAULT_LLM_TIMEOUT || '30000'),
+      retryAttempts: parseInt(process.env.DEFAULT_LLM_RETRY_ATTEMPTS || '3'),
+    };
   }
 
   /**
-   * 构建LLM配置
+   * 根据角色标签获取LLM配置
    */
-  static buildLLMConfig(
-    provider: LLMProvider, 
-    model: string, 
+  static async getConfigForAgent(roleTag: string): Promise<LLMConfig> {
+    // 查找Agent及其关联的Model和Provider
+    const agent = await prisma.agent.findFirst({
+      where: { roleTag, enabled: true },
+      include: {
+        model: {
+          include: {
+            provider: true
+          }
+        }
+      }
+    });
+
+    console.log(`🔍 [LLMConfigManager] getConfigForAgent(${roleTag}):`, {
+      agentFound: !!agent,
+      modelFound: !!agent?.model,
+      providerFound: !!agent?.model?.provider,
+      agentModelId: agent?.modelId,
+      modelCode: agent?.model?.code,
+      providerCode: agent?.model?.provider?.code
+    });
+
+    if (!agent || !agent.model || !agent.model.provider) {
+      // 回退到默认配置
+      console.warn(`Agent ${roleTag} not found or not properly configured, using default config`);
+      return this.getConfig();
+    }
+
+    const model = agent.model;
+    const provider = agent.model.provider;
+
+    const llmConfig = {
+      provider: provider.code as LLMProvider,
+      model: model.code,
+      apiKey: provider.apiKey,
+      baseURL: provider.baseUrl,
+      temperature: agent.temperature,
+      maxTokens: agent.maxTokens,
+      timeout: parseInt(process.env.DEFAULT_LLM_TIMEOUT || '30000'),
+      retryAttempts: parseInt(process.env.DEFAULT_LLM_RETRY_ATTEMPTS || '3'),
+    };
+
+    console.log(`🔧 [LLMConfigManager] Generated config for ${roleTag}:`, {
+      provider: llmConfig.provider,
+      providerType: typeof llmConfig.provider,
+      model: llmConfig.model,
+      hasApiKey: !!llmConfig.apiKey,
+      baseURL: llmConfig.baseURL
+    });
+
+    return llmConfig;
+  }
+
+  /**
+   * 构建LLM配置 - 从数据库获取Provider信息
+   */
+  static async buildLLMConfig(
+    providerCode: string, 
+    modelCode: string, 
     options: Partial<LLMConfig> = {}
-  ): LLMConfig {
-    const apiKey = this.getAPIKey(provider);
-    const baseUrl = this.getBaseUrl(provider);
+  ): Promise<LLMConfig> {
+    const provider = await prisma.lLMProvider.findFirst({
+      where: { code: providerCode, isActive: true },
+      include: {
+        models: {
+          where: { code: modelCode, isActive: true },
+          take: 1
+        }
+      }
+    });
+
+    if (!provider || !provider.models[0]) {
+      throw new Error(`Provider ${providerCode} or model ${modelCode} not found`);
+    }
+
+    const model = provider.models[0];
 
     return {
-      provider,
-      model,
-      apiKey,
-      baseUrl,
+      provider: provider.code as LLMProvider,
+      model: model.code,
+      apiKey: provider.apiKey,
+      baseURL: provider.baseUrl,
       temperature: options.temperature || 0.7,
-      maxTokens: options.maxTokens || 2000,
+      maxTokens: options.maxTokens || model.maxTokens,
       timeout: options.timeout || 30000,
       retryAttempts: options.retryAttempts || 3,
       ...options,
@@ -51,74 +133,97 @@ export class LLMConfigManager {
   }
 
   /**
-   * 获取API密钥
+   * 获取API密钥 - 从数据库获取
    */
-  private static getAPIKey(provider: LLMProvider): string {
-    const envMap = {
-      openai: 'OPENAI_API_KEY',
-      anthropic: 'ANTHROPIC_API_KEY',
-      google: 'GOOGLE_API_KEY',
-      deepseek: 'DEEPSEEK_API_KEY',
-      doubao: 'DOUBAO_API_KEY',
-      xai: 'XAI_API_KEY',
-      modelscope: 'MODELSCOPE_API_KEY',
-      custom: 'CUSTOM_API_KEY',
-    };
+  static async getAPIKey(providerCode: string): Promise<string> {
+    const provider = await prisma.lLMProvider.findFirst({
+      where: { code: providerCode, isActive: true }
+    });
 
-    const envKey = envMap[provider];
-    const apiKey = process.env[envKey];
-
-    if (!apiKey) {
-      throw new Error(`API key not found for ${provider}. Please set ${envKey} environment variable.`);
+    if (!provider || !provider.apiKey) {
+      throw new Error(`API key not found for provider: ${providerCode}`);
     }
 
-    return apiKey;
+    return provider.apiKey;
   }
 
   /**
-   * 获取基础URL
+   * 获取基础URL - 从数据库获取
    */
-  private static getBaseUrl(provider: LLMProvider): string | undefined {
-    const providerInfo = providersConfig.providers[provider as keyof typeof providersConfig.providers];
-    return providerInfo?.baseUrl;
+  static async getBaseUrl(providerCode: string): Promise<string | undefined> {
+    const provider = await prisma.lLMProvider.findFirst({
+      where: { code: providerCode, isActive: true }
+    });
+    return provider?.baseUrl;
   }
 
   /**
-   * 获取所有可用的提供商
+   * 获取所有可用的提供商 - 从数据库获取
    */
-  static getAvailableProviders(): Array<{ id: LLMProvider; name: string; models: any[] }> {
-    return Object.entries(providersConfig.providers).map(([id, config]) => ({
-      id: id as LLMProvider,
-      name: config.name,
-      models: config.models,
+  static async getAvailableProviders(): Promise<Array<{ id: string; name: string; models: string[] }>> {
+    const providers = await prisma.lLMProvider.findMany({
+      where: { isActive: true },
+      include: {
+        models: {
+          where: { isActive: true }
+        }
+      }
+    });
+
+    return providers.map(provider => ({
+      id: provider.code,
+      name: provider.name,
+      models: provider.models.map(model => model.code)
     }));
   }
 
   /**
-   * 获取指定提供商的模型列表
+   * 获取指定提供商的模型列表 - 从数据库获取
    */
-  static getModelsForProvider(provider: LLMProvider): string[] {
-    const providerInfo = providersConfig.providers[provider as keyof typeof providersConfig.providers];
-    return providerInfo?.models.map(model => model.id) || [];
+  static async getModelsForProvider(providerCode: string): Promise<string[]> {
+    const provider = await prisma.lLMProvider.findFirst({
+      where: { code: providerCode, isActive: true },
+      include: {
+        models: {
+          where: { isActive: true }
+        }
+      }
+    });
+    return provider?.models.map(model => model.code) || [];
   }
 
   /**
-   * 验证配置是否完整
+   * 验证配置是否完整 - 检查数据库配置
    */
-  static validateConfiguration(): { isValid: boolean; errors: string[] } {
+  static async validateConfiguration(): Promise<{ isValid: boolean; errors: string[] }> {
     const errors: string[] = [];
     
-    // 检查必要的环境变量
-    const requiredEnvVars = [
-      'OPENAI_API_KEY',
-      'DEEPSEEK_API_KEY',
-      // 添加其他必需的API密钥
-    ];
+    try {
+      // 检查是否有活跃的Provider
+      const activeProviders = await prisma.lLMProvider.findMany({
+        where: { isActive: true },
+        include: {
+          models: {
+            where: { isActive: true }
+          }
+        }
+      });
 
-    for (const envVar of requiredEnvVars) {
-      if (!process.env[envVar]) {
-        errors.push(`Missing environment variable: ${envVar}`);
+      if (activeProviders.length === 0) {
+        errors.push('No active LLM providers found in database');
+      } else {
+        // 检查每个Provider是否有API密钥和模型
+        for (const provider of activeProviders) {
+          if (!provider.apiKey) {
+            errors.push(`Provider ${provider.name} is missing API key`);
+          }
+          if (provider.models.length === 0) {
+            errors.push(`Provider ${provider.name} has no active models`);
+          }
+        }
       }
+    } catch (error) {
+      errors.push(`Database validation error: ${(error as Error).message}`);
     }
 
     return {
@@ -128,13 +233,28 @@ export class LLMConfigManager {
   }
 
   /**
-   * 获取模型的成本信息
+   * 获取模型的成本信息 - 从数据库获取
    */
-  static getModelCost(provider: LLMProvider, model: string): { input: number; output: number } | null {
-    const providerInfo = providersConfig.providers[provider as keyof typeof providersConfig.providers];
-    const modelInfo = providerInfo?.models.find(m => m.id === model);
-    
-    return modelInfo?.costPer1kTokens || null;
+  static async getModelCost(providerCode: string, modelCode: string): Promise<{ input: number; output: number } | null> {
+    const model = await prisma.lLMModel.findFirst({
+      where: {
+        code: modelCode,
+        provider: {
+          code: providerCode
+        },
+        isActive: true
+      }
+    });
+
+    if (!model || !model.pricing) {
+      return null;
+    }
+
+    const pricing = model.pricing as any;
+    return {
+      input: pricing.input || 0,
+      output: pricing.output || 0
+    };
   }
 }
 

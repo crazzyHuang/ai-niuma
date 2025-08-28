@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +8,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, MessageCircle, Users, Search, ArrowLeft, ArrowRight, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu, ChevronRight, X } from 'lucide-react';
+import { Plus, MessageCircle, Users, Search, ArrowLeft, ArrowRight, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu, ChevronRight, X, Settings, LogOut, User, Trash2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 // 消息和流式数据接口
 interface Message {
@@ -172,18 +174,18 @@ function ChatInterface({
                 if (!prev) return null;
                 return {
                   ...prev,
-                  content: prev.content + (data.text || '')
+                  content: prev.content + (data.content || '') // 使用data.content而不是data.text
                 };
               });
               break;
 
             case 'agent_complete':
-              // Add completed message to messages using fullContent from data
-              if (data.fullContent && data.agent) {
+              // Add completed message to messages using content from data
+              if (data.content && data.agent) {
                 const completedMessage: Message = {
-                  id: data.messageId || `completed-${data.agent}-${Date.now()}`,
+                  id: `completed-${data.agent}-${Date.now()}`,
                   role: 'ai',
-                  content: data.fullContent,
+                  content: data.content, // 使用data.content而不是data.fullContent
                   timestamp: new Date(),
                   agent: data.agent
                 };
@@ -479,6 +481,7 @@ interface Agent {
 
 export default function ChatPage() {
   const router = useRouter();
+  const { user, logout, isAuthenticated, isLoading } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -489,13 +492,7 @@ export default function ChatPage() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isGroupDrawerOpen, setIsGroupDrawerOpen] = useState(false);
 
-  // 加载对话列表
-  useEffect(() => {
-    loadConversations();
-    loadAgents();
-  }, []);
-
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     try {
       const response = await fetch('/api/conversations');
       if (response.ok) {
@@ -508,9 +505,41 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Failed to load conversations:', error);
     }
-  };
+  }, [selectedConversation]);
 
-  const loadAgents = async () => {
+  const deleteConversation = useCallback(async (conversationId: string) => {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        // 从对话列表中移除已删除的对话
+        setConversations(prev => prev.filter(c => c.id !== conversationId));
+        
+        // 如果删除的是当前选中的对话，选择列表中的第一个对话
+        if (selectedConversation === conversationId) {
+          const remainingConversations = conversations.filter(c => c.id !== conversationId);
+          if (remainingConversations.length > 0) {
+            setSelectedConversation(remainingConversations[0].id);
+          } else {
+            setSelectedConversation(null);
+          }
+        }
+        
+        // 清空消息列表
+        setMessages([]);
+      } else {
+        console.error('Failed to delete conversation');
+        alert('删除对话失败，请重试');
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      alert('删除对话时出现错误');
+    }
+  }, [conversations, selectedConversation]);
+
+  const loadAgents = useCallback(async () => {
     try {
       const response = await fetch('/api/agents');
       if (response.ok) {
@@ -520,7 +549,28 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Failed to load agents:', error);
     }
-  };
+  }, []);
+
+  // 加载对话列表
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      loadConversations();
+      loadAgents();
+    }
+  }, [isAuthenticated, user, loadConversations, loadAgents]);
+
+  // 如果用户未认证，不应该渲染聊天页面（中间件应该已经处理重定向）
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return null; // 中间件会处理重定向
+  }
 
   const createConversation = async () => {
     if (selectedAgents.length === 0) return;
@@ -536,6 +586,7 @@ export default function ChatPage() {
             ? `与 ${agents.find(a => a.id === selectedAgents[0])?.name} 的对话`
             : `群聊: ${newGroupName || selectedAgents.map(id => agents.find(a => a.id === id)?.name).join(', ')}`,
           mode: 'smart',
+          selectedAgents: selectedAgents, // 传递用户选择的智能体
         }),
       });
 
@@ -565,78 +616,257 @@ export default function ChatPage() {
         <div className={`${isSidebarCollapsed ? 'w-16' : 'w-72'} border-r border-border flex flex-col bg-muted/5 transition-all duration-300`}>
           {/* 头部 */}
           <div className="p-3 border-b border-border">
+            {/* 用户信息和标题 */}
             <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} mb-3`}>
-              {!isSidebarCollapsed && <h1 className="text-lg font-semibold">AI 朋友圈</h1>}
+              {!isSidebarCollapsed && (
+                <div className="flex items-center gap-3">
+                  <h1 className="text-lg font-semibold">AI 朋友圈</h1>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 rounded-full p-0">
+                        <Avatar className="h-6 w-6">
+                          <div className="h-full w-full rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
+                            {user.name?.slice(0, 1) || user.email.slice(0, 1).toUpperCase()}
+                          </div>
+                        </Avatar>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <div className="flex items-center justify-start gap-2 p-2">
+                        <div className="flex flex-col space-y-1 leading-none">
+                          {user.name && (
+                            <p className="font-medium">{user.name}</p>
+                          )}
+                          <p className="w-[200px] truncate text-sm text-muted-foreground">
+                            {user.email}
+                          </p>
+                        </div>
+                      </div>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem>
+                        <User className="mr-2 h-4 w-4" />
+                        <span>个人资料</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push('/admin')}>
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>设置</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={logout}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>退出登录</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
+              {isSidebarCollapsed && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 rounded-full p-0">
+                      <Avatar className="h-6 w-6">
+                        <div className="h-full w-full rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
+                          {user.name?.slice(0, 1) || user.email.slice(0, 1).toUpperCase()}
+                        </div>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <div className="flex items-center justify-start gap-2 p-2">
+                      <div className="flex flex-col space-y-1 leading-none">
+                        {user.name && (
+                          <p className="font-medium">{user.name}</p>
+                        )}
+                        <p className="w-[200px] truncate text-sm text-muted-foreground">
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>
+                      <User className="mr-2 h-4 w-4" />
+                      <span>个人资料</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/admin')}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>设置</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={logout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>退出登录</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+            
+            {/* 创建对话按钮 */}
+            <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-end'} mb-3`}>
               <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" className={`${isSidebarCollapsed ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`}>
                     <Plus className="h-4 w-4" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>创建新对话</DialogTitle>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader className="space-y-3 pb-6">
+                    <DialogTitle className="text-xl font-semibold flex items-center gap-3">
+                      <div className="w-10 h-10 border border-border bg-muted rounded-lg flex items-center justify-center">
+                        <Plus className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <span>创建新对话</span>
+                    </DialogTitle>
+                    <p className="text-sm text-muted-foreground">选择一个或多个智能体开始对话</p>
                   </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium">选择智能体</label>
-                      <div className="mt-2 grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                        {agents.map(agent => (
-                          <Card
-                            key={agent.id}
-                            className={`cursor-pointer transition-colors ${
-                              selectedAgents.includes(agent.id)
-                                ? 'ring-2 ring-primary bg-primary/5'
-                                : 'hover:bg-muted/50'
-                            }`}
-                            onClick={() => {
-                              setSelectedAgents(prev =>
-                                prev.includes(agent.id)
-                                  ? prev.filter(id => id !== agent.id)
-                                  : [...prev, agent.id]
-                              );
-                            }}
-                          >
-                            <CardContent className="p-3">
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-8 w-8">
-                                  <div
-                                    className="h-full w-full rounded-full flex items-center justify-center text-xs font-medium text-white"
-                                    style={{ backgroundColor: agent.color }}
-                                  >
-                                    {agent.avatar || agent.name.slice(0, 1)}
+                  
+                  <div className="space-y-6">
+                    {/* 智能体选择区域 */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-foreground">选择智能体</label>
+                        {selectedAgents.length > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            已选择 {selectedAgents.length} 个
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="border border-border rounded-lg bg-card">
+                        <div className="p-2 space-y-2 max-h-64 overflow-y-auto">
+                          {agents.map(agent => {
+                            const isSelected = selectedAgents.includes(agent.id);
+                            return (
+                              <div
+                                key={agent.id}
+                                className={`group relative cursor-pointer transition-all duration-200 rounded-md border p-3 ${
+                                  isSelected
+                                    ? 'border-primary bg-accent'
+                                    : 'border-border hover:border-primary hover:bg-accent/50'
+                                }`}
+                                onClick={() => {
+                                  setSelectedAgents(prev =>
+                                    prev.includes(agent.id)
+                                      ? prev.filter(id => id !== agent.id)
+                                      : [...prev, agent.id]
+                                  );
+                                }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {/* 选择状态指示器 */}
+                                  <div className={`relative flex items-center justify-center w-4 h-4 rounded-full border-2 transition-all duration-200 ${
+                                    isSelected 
+                                      ? 'border-primary bg-primary' 
+                                      : 'border-muted-foreground/30 group-hover:border-primary/50'
+                                  }`}>
+                                    {isSelected && (
+                                      <div className="w-1.5 h-1.5 bg-primary-foreground rounded-full" />
+                                    )}
                                   </div>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{agent.name}</p>
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {agent.description || agent.roleTag}
-                                  </p>
+
+                                  {/* 智能体头像 */}
+                                  <Avatar className="h-9 w-9">
+                                    <div
+                                      className="h-full w-full rounded-full flex items-center justify-center text-sm font-medium text-white"
+                                      style={{ backgroundColor: agent.color }}
+                                    >
+                                      {agent.avatar || agent.name.slice(0, 1)}
+                                    </div>
+                                  </Avatar>
+
+                                  {/* 智能体信息 */}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-foreground">
+                                      {agent.name}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                                      {agent.description || agent.roleTag}
+                                    </p>
+                                  </div>
+
+                                  {/* 角色标签 */}
+                                  <Badge 
+                                    variant="secondary" 
+                                    className="text-xs bg-muted text-muted-foreground"
+                                  >
+                                    {agent.roleTag}
+                                  </Badge>
                                 </div>
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+                            );
+                          })}
+                        </div>
+                        
+                        {agents.length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">暂无可用智能体</p>
+                            <p className="text-xs mt-1">请先在管理面板中配置智能体</p>
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    {/* 群聊名称输入（多选时显示） */}
                     {selectedAgents.length > 1 && (
-                      <div>
-                        <label className="text-sm font-medium">群聊名称（可选）</label>
-                        <Input
-                          value={newGroupName}
-                          onChange={(e) => setNewGroupName(e.target.value)}
-                          placeholder="输入群聊名称"
-                          className="mt-1"
-                        />
+                      <div className="space-y-3 animate-in slide-in-from-bottom-2 duration-300">
+                        <label className="text-sm font-medium text-foreground">群聊名称</label>
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              value={newGroupName}
+                              onChange={(e) => setNewGroupName(e.target.value)}
+                              placeholder="输入群聊名称（可选）"
+                              className="pl-10"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            留空将自动生成默认名称
+                          </p>
+                        </div>
                       </div>
                     )}
-                    <Button
-                      onClick={createConversation}
-                      disabled={selectedAgents.length === 0}
-                      className="w-full"
-                    >
-                      创建对话
-                    </Button>
+
+                    {/* 创建按钮区域 */}
+                    <div className="space-y-3 pt-4 border-t border-border">
+                      {selectedAgents.length > 0 && (
+                        <div className="flex items-center justify-center p-3 bg-muted rounded-md">
+                          <div className="flex items-center gap-2 text-sm text-foreground">
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span>准备就绪</span>
+                            </div>
+                            <span className="text-muted-foreground">•</span>
+                            <span className="text-muted-foreground">
+                              {selectedAgents.length === 1 
+                                ? `与 ${agents.find(a => a.id === selectedAgents[0])?.name} 对话`
+                                : `${selectedAgents.length} 人群聊`
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <Button
+                        onClick={createConversation}
+                        disabled={selectedAgents.length === 0}
+                        className="w-full"
+                        size="default"
+                      >
+                        {selectedAgents.length === 0 ? (
+                          <>
+                            <MessageCircle className="h-4 w-4 mr-2" />
+                            请选择智能体
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4 mr-2" />
+                            开始对话
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -662,41 +892,76 @@ export default function ChatPage() {
               {filteredConversations.map(conversation => (
                 <div
                   key={conversation.id}
-                  className={`cursor-pointer transition-colors border-b border-border/50 px-3 py-2 ${
+                  className={`group transition-colors border-b border-border/50 ${
                     selectedConversation === conversation.id
                       ? 'bg-primary/10 border-primary/20'
                       : 'hover:bg-muted/30'
                   }`}
-                  onClick={() => {
-                    setSelectedConversation(conversation.id);
-                  }}
                 >
-                  <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-2'}`}>
-                    <Avatar className={`${isSidebarCollapsed ? 'h-8 w-8' : 'h-6 w-6'}`}>
-                      {conversation.group ? (
-                        <div className="h-full w-full rounded-full bg-primary/10 flex items-center justify-center">
-                          <Users className={`${isSidebarCollapsed ? 'h-4 w-4' : 'h-3 w-3'} text-primary`} />
-                        </div>
-                      ) : (
-                        <div className="h-full w-full rounded-full bg-muted flex items-center justify-center">
-                          <MessageCircle className={`${isSidebarCollapsed ? 'h-4 w-4' : 'h-3 w-3'} text-muted-foreground`} />
+                  <div className="flex items-center px-3 py-2">
+                    {/* 主要内容区域，点击切换对话 */}
+                    <div 
+                      className={`flex items-center flex-1 cursor-pointer ${isSidebarCollapsed ? 'justify-center' : 'gap-2'}`}
+                      onClick={() => {
+                        setSelectedConversation(conversation.id);
+                      }}
+                    >
+                      <Avatar className={`${isSidebarCollapsed ? 'h-8 w-8' : 'h-6 w-6'}`}>
+                        {conversation.group ? (
+                          <div className="h-full w-full rounded-full bg-primary/10 flex items-center justify-center">
+                            <Users className={`${isSidebarCollapsed ? 'h-4 w-4' : 'h-3 w-3'} text-primary`} />
+                          </div>
+                        ) : (
+                          <div className="h-full w-full rounded-full bg-muted flex items-center justify-center">
+                            <MessageCircle className={`${isSidebarCollapsed ? 'h-4 w-4' : 'h-3 w-3'} text-muted-foreground`} />
+                          </div>
+                        )}
+                      </Avatar>
+                      {!isSidebarCollapsed && (
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{conversation.title}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(conversation.updatedAt).toLocaleDateString()}
+                            </p>
+                            {conversation.group && (
+                              <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
+                                {conversation.group.members.length} 成员
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       )}
-                    </Avatar>
+                    </div>
+                    
+                    {/* 删除按钮，只在非折叠状态显示 */}
                     {!isSidebarCollapsed && (
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{conversation.title}</p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(conversation.updatedAt).toLocaleDateString()}
-                          </p>
-                          {conversation.group && (
-                            <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
-                              {conversation.group.members.length} 成员
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()} // 防止触发对话切换
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm('确定要删除这个对话吗？删除后将无法恢复。')) {
+                                deleteConversation(conversation.id);
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            删除对话
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
                 </div>
