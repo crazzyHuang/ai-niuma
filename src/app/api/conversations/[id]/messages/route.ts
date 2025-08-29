@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { APIResponseHelper } from '@/types/api'
 
 export async function GET(
   request: Request,
@@ -14,13 +15,15 @@ export async function GET(
       orderBy: { createdAt: 'asc' },
     });
 
-    return NextResponse.json(messages);
+    return NextResponse.json(
+        APIResponseHelper.success(messages)
+      );
   } catch (error) {
     console.error('Error fetching messages:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch messages' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('Failed to fetch messages', 'API error'),
+        { status: 500 }
+      );
   }
 }
 
@@ -31,7 +34,10 @@ export async function POST(
   try {
     const user = await verifyAuth(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        APIResponseHelper.error('Unauthorized', 'API error'),
+        { status: 401 }
+      );
     }
 
     const { id: conversationId } = await params;
@@ -39,7 +45,10 @@ export async function POST(
     const { content, role } = body;
 
     if (!content || !role) {
-      return NextResponse.json({ error: 'Missing content or role' }, { status: 400 });
+      return NextResponse.json(
+        APIResponseHelper.error('Missing content or role', 'API error'),
+        { status: 400 }
+      );
     }
 
     // 验证用户是否拥有这个对话
@@ -51,7 +60,10 @@ export async function POST(
     });
 
     if (!conversation) {
-      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+      return NextResponse.json(
+        APIResponseHelper.error('Conversation not found', 'API error'),
+        { status: 404 }
+      );
     }
 
     // 保存用户消息到数据库
@@ -67,13 +79,15 @@ export async function POST(
 
     console.log(`💾 用户消息已保存 [${conversationId}]:`, userMessage.id);
 
-    return NextResponse.json(userMessage);
+    return NextResponse.json(
+        APIResponseHelper.success(userMessage)
+      );
 
   } catch (error) {
     console.error('发送消息失败:', error);
     return NextResponse.json(
-      { error: '发送消息失败' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('发送消息失败', 'API error'),
+        { status: 500 }
+      );
   }
 }

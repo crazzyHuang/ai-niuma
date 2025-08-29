@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { APIResponseHelper } from '@/types/api'
 
 export async function GET() {
   try {
@@ -8,12 +9,14 @@ export async function GET() {
       orderBy: { order: 'asc' },
     });
 
-    return NextResponse.json(agents);
+    return NextResponse.json(
+        APIResponseHelper.success(agents)
+      );
   } catch (error) {
     console.error('Error fetching agents:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch agents' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('Failed to fetch agents', 'API error'),
+        { status: 500 }
+      );
   }
 }

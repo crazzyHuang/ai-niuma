@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
+import { APIResponseHelper } from '@/types/api'
 
 const prisma = new PrismaClient()
 
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     if (!token) {
       return NextResponse.json(
-        { message: '未提供认证令牌' },
+        APIResponseHelper.error('未提供认证令牌', 'API error'),
         { status: 401 }
       )
     }
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     if (!JWT_SECRET) {
       console.error('JWT_SECRET environment variable is not set')
       return NextResponse.json(
-        { message: '服务器配置错误' },
+        APIResponseHelper.error('服务器配置错误', 'API error'),
         { status: 500 }
       )
     }
@@ -32,14 +33,14 @@ export async function GET(request: NextRequest) {
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
         return NextResponse.json(
-          { message: '认证令牌已过期，请重新登录' },
-          { status: 401 }
-        )
+        APIResponseHelper.error('认证令牌已过期，请重新登录', 'API error'),
+        { status: 401 }
+      )
       } else if (error instanceof jwt.JsonWebTokenError) {
         return NextResponse.json(
-          { message: '无效的认证令牌' },
-          { status: 401 }
-        )
+        APIResponseHelper.error('无效的认证令牌', 'API error'),
+        { status: 401 }
+      )
       } else {
         throw error
       }
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { message: '用户不存在' },
+        APIResponseHelper.error('用户不存在', 'API error'),
         { status: 401 }
       )
     }
@@ -69,13 +70,14 @@ export async function GET(request: NextRequest) {
     // Check if email in token matches user email (in case email was changed)
     if (user.email !== decoded.email) {
       return NextResponse.json(
-        { message: '认证令牌无效，请重新登录' },
+        APIResponseHelper.error('认证令牌无效，请重新登录', 'API error'),
         { status: 401 }
       )
     }
 
     // Return success response with updated user data
-    return NextResponse.json({
+    return NextResponse.json(
+        APIResponseHelper.success({
       message: '认证令牌有效',
       user,
       tokenInfo: {
@@ -86,6 +88,7 @@ export async function GET(request: NextRequest) {
         iat: decoded.iat,
       },
     })
+      )
 
   } catch (error) {
     console.error('Token verification error:', error)
@@ -93,15 +96,15 @@ export async function GET(request: NextRequest) {
     // Handle database connection errors
     if (error instanceof Error && error.message.includes('connection')) {
       return NextResponse.json(
-        { message: '数据库连接错误，请稍后重试' },
+        APIResponseHelper.error('数据库连接错误，请稍后重试', 'API error'),
         { status: 503 }
       )
     }
 
     return NextResponse.json(
-      { message: '服务器内部错误，请稍后重试' },
-      { status: 500 }
-    )
+        APIResponseHelper.error('服务器内部错误，请稍后重试', 'API error'),
+        { status: 500 }
+      )
   } finally {
     await prisma.$disconnect()
   }

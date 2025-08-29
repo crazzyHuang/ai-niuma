@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { APIResponseHelper } from '@/types/api'
 
 /**
  * 删除单个对话
@@ -16,7 +17,7 @@ export async function DELETE(
     
     if (!userId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        APIResponseHelper.error('Unauthorized', 'API error'),
         { status: 401 }
       );
     }
@@ -31,7 +32,7 @@ export async function DELETE(
 
     if (!conversation) {
       return NextResponse.json(
-        { error: 'Conversation not found or unauthorized' },
+        APIResponseHelper.error('Conversation not found or unauthorized', 'API error'),
         { status: 404 }
       );
     }
@@ -57,9 +58,9 @@ export async function DELETE(
   } catch (error) {
     console.error('Error deleting conversation:', error);
     return NextResponse.json(
-      { error: 'Failed to delete conversation' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('Failed to delete conversation', 'API error'),
+        { status: 500 }
+      );
   }
 }
 
@@ -78,7 +79,7 @@ export async function GET(
     
     if (!userId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        APIResponseHelper.error('Unauthorized', 'API error'),
         { status: 401 }
       );
     }
@@ -92,18 +93,20 @@ export async function GET(
 
     if (!conversation) {
       return NextResponse.json(
-        { error: 'Conversation not found' },
+        APIResponseHelper.error('Conversation not found', 'API error'),
         { status: 404 }
       );
     }
 
-    return NextResponse.json(conversation);
+    return NextResponse.json(
+        APIResponseHelper.success(conversation)
+      );
 
   } catch (error) {
     console.error('Error fetching conversation:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch conversation' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('Failed to fetch conversation', 'API error'),
+        { status: 500 }
+      );
   }
 }

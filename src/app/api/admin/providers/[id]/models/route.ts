@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { APIResponseHelper } from '@/types/api'
 
 /**
  * 获取指定提供商的所有模型
@@ -12,7 +13,10 @@ export async function GET(
   try {
     const user = await verifyAuth(request);
     if (!user || user.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        APIResponseHelper.error('Unauthorized', 'API error'),
+        { status: 401 }
+      );
     }
 
     const { id: providerId } = await params;
@@ -22,12 +26,14 @@ export async function GET(
       orderBy: { name: 'asc' }
     });
 
-    return NextResponse.json(models);
+    return NextResponse.json(
+        APIResponseHelper.success(models)
+      );
   } catch (error) {
     console.error('Error fetching models:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch models' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('Failed to fetch models', 'API error'),
+        { status: 500 }
+      );
   }
 }

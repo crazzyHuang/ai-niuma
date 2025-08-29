@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { APIResponseHelper } from '@/types/api'
 
 export const runtime = 'nodejs';
 
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
 
     if (!content || typeof content !== 'string') {
       return NextResponse.json(
-        { error: '提示词内容不能为空' },
+        APIResponseHelper.error('提示词内容不能为空', 'API error'),
         { status: 400 }
       );
     }
@@ -36,9 +37,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('美化提示词错误:', error);
     return NextResponse.json(
-      { error: '美化失败，请重试' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('美化失败，请重试', 'API error'),
+        { status: 500 }
+      );
   }
 }
 

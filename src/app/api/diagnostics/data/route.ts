@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import diagnosticService from '@/lib/diagnostic-service';
+import { APIResponseHelper } from '@/types/api'
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,13 +54,16 @@ export async function GET(request: NextRequest) {
     // 限制返回数量
     const limitedDiagnostics = diagnostics.slice(0, limit);
 
-    return NextResponse.json(limitedDiagnostics);
+    return NextResponse.json(
+        APIResponseHelper.success(limitedDiagnostics)
+      );
 
   } catch (error) {
     console.error('获取诊断数据失败:', error);
     
     return NextResponse.json(
-      { error: '获取诊断数据失败', details: error instanceof Error ? error.message : String(error) },
+        APIResponseHelper.success({ error: '获取诊断数据失败', details: error instanceof Error ? error.message : String(error)
+      ) },
       { status: 500 }
     );
   }
@@ -76,11 +80,15 @@ export async function POST(request: NextRequest) {
           params.conversationId,
           params.userMessage
         );
-        return NextResponse.json({ diagnosticId });
+        return NextResponse.json(
+        APIResponseHelper.success({ diagnosticId })
+      );
 
       case 'finish_diagnostic':
         const result = await diagnosticService.finishConversationDiagnostic(params.diagnosticId);
-        return NextResponse.json(result);
+        return NextResponse.json(
+        APIResponseHelper.success(result)
+      );
 
       case 'record_analysis':
         diagnosticService.recordAnalysisPhase(
@@ -113,14 +121,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true });
 
       default:
-        return NextResponse.json({ error: '未知的操作类型' }, { status: 400 });
+        return NextResponse.json(
+        APIResponseHelper.error('未知的操作类型', 'API error'),
+        { status: 400 }
+      );
     }
 
   } catch (error) {
     console.error('处理诊断请求失败:', error);
     
     return NextResponse.json(
-      { error: '处理诊断请求失败', details: error instanceof Error ? error.message : String(error) },
+        APIResponseHelper.success({ error: '处理诊断请求失败', details: error instanceof Error ? error.message : String(error)
+      ) },
       { status: 500 }
     );
   }

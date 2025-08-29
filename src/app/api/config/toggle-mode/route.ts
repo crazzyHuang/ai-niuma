@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AgentConfigManager } from '@/lib/agent-config-manager';
+import { APIResponseHelper } from '@/types/api'
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,11 +18,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Failed to toggle mode:', error);
     return NextResponse.json(
-      { 
+        APIResponseHelper.success({ 
         error: 'Failed to toggle mode',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
-    );
+      { status: 500 })
+      );
   }
 }

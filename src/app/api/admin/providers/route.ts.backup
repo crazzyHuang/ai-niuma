@@ -1,0 +1,119 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyAuth } from '@/lib/auth';
+import prisma from '@/lib/db';
+
+/**
+ * 获取所有LLM提供商
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const user = await verifyAuth(request);
+    if (!user || user.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const providers = await prisma.lLMProvider.findMany({
+      include: {
+        models: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            contextLength: true,
+            maxTokens: true,
+            capabilities: true,
+            isActive: true,
+            _count: {
+              select: {
+                agents: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform the data to match the expected interface
+    const transformedProviders = providers.map(provider => ({
+      ...provider,
+      models: provider.models.map(model => ({
+        ...model,
+        agentCount: model._count.agents
+      })),
+      agentCount: provider.models.reduce((sum, model) => sum + model._count.agents, 0)
+    }));
+
+    return NextResponse.json({
+      success: true,
+      data: transformedProviders
+    });
+  } catch (error) {
+    console.error('Error fetching providers:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch providers' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * 创建新的LLM提供商
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const user = await verifyAuth(request);
+    if (!user || user.role !== 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { name, code, baseUrl, apiKey, isActive } = body;
+
+    // 验证必需字段
+    if (!name || !code || !baseUrl || !apiKey) {
+      return NextResponse.json(
+        { success: false, error: '所有字段都是必需的' },
+        { status: 400 }
+      );
+    }
+
+    // 检查代码是否已存在
+    const existingProvider = await prisma.lLMProvider.findUnique({
+      where: { code }
+    });
+
+    if (existingProvider) {
+      return NextResponse.json(
+        { success: false, error: '提供商代码已存在' },
+        { status: 400 }
+      );
+    }
+
+    // 创建提供商
+    const provider = await prisma.lLMProvider.create({
+      data: {
+        name,
+        code,
+        baseUrl,
+        apiKey,
+        isActive: isActive ?? true
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: provider
+    });
+
+  } catch (error) {
+    console.error('Error creating provider:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to create provider' },
+      { status: 500 }
+    );
+  }
+}

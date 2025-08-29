@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AgentConfigManager } from '@/lib/agent-config-manager';
+import { APIResponseHelper } from '@/types/api'
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,14 +9,16 @@ export async function GET(request: NextRequest) {
     const agents = AgentConfigManager.getAllAgents();
     const flows = AgentConfigManager.getAllFlows();
 
-    return NextResponse.json({
+    return NextResponse.json(
+        APIResponseHelper.success({
       isSingleProvider,
       currentProvider,
       agents: agents.map(agent => ({
         roleTag: agent.roleTag,
         name: agent.name,
         order: agent.order,
-      })),
+      })
+      )),
       flows: flows.map(flow => ({
         name: flow.name,
         mode: flow.mode,
@@ -26,11 +29,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Failed to get current config:', error);
     return NextResponse.json(
-      { 
+        APIResponseHelper.success({ 
         error: 'Failed to get configuration',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
-    );
+      { status: 500 })
+      );
   }
 }

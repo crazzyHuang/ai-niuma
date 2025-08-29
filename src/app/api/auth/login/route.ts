@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
+import { APIResponseHelper } from '@/types/api'
 
 const prisma = new PrismaClient()
 
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
     // Input validation
     if (!email || !password) {
       return NextResponse.json(
-        { message: '邮箱和密码不能为空' },
+        APIResponseHelper.error('邮箱和密码不能为空', 'Email and password are required'),
         { status: 400 }
       )
     }
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       return NextResponse.json(
-        { message: '请输入有效的邮箱地址' },
+        APIResponseHelper.error('请输入有效的邮箱地址', 'Invalid email format'),
         { status: 400 }
       )
     }
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { message: '邮箱或密码错误' },
+        APIResponseHelper.error('邮箱或密码错误', 'Invalid credentials'),
         { status: 401 }
       )
     }
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     const isPasswordValid = await bcrypt.compare(password, user.password)
     if (!isPasswordValid) {
       return NextResponse.json(
-        { message: '邮箱或密码错误' },
+        APIResponseHelper.error('邮箱或密码错误', 'Invalid credentials'),
         { status: 401 }
       )
     }
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     if (!JWT_SECRET) {
       console.error('JWT_SECRET environment variable is not set')
       return NextResponse.json(
-        { message: '服务器配置错误' },
+        APIResponseHelper.error('服务器配置错误', 'JWT_SECRET not configured'),
         { status: 500 }
       )
     }
@@ -91,11 +92,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Create response with token cookie
-    const response = NextResponse.json({
-      message: '登录成功',
-      token,
-      user: userData,
-    })
+    const response = NextResponse.json(
+      APIResponseHelper.success({
+        token,
+        user: userData,
+      }, '登录成功')
+    )
 
     // Set JWT token as HTTP-only cookie for security
     response.cookies.set('auth_token', token, {
@@ -114,13 +116,13 @@ export async function POST(request: NextRequest) {
     // Handle Prisma-specific errors
     if (error instanceof Error && error.message.includes('connection')) {
       return NextResponse.json(
-        { message: '数据库连接错误，请稍后重试' },
+        APIResponseHelper.error('数据库连接错误，请稍后重试', 'Database connection failed'),
         { status: 503 }
       )
     }
 
     return NextResponse.json(
-      { message: '服务器内部错误，请稍后重试' },
+      APIResponseHelper.error('服务器内部错误，请稍后重试', error instanceof Error ? error.message : 'Unknown error'),
       { status: 500 }
     )
   } finally {

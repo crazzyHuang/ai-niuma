@@ -88,8 +88,13 @@ export default function SceneAnalyzerManager() {
     try {
       const response = await fetch('/api/admin/scene-analyzers');
       if (response.ok) {
-        const data = await response.json();
-        setSceneAnalyzers(data);
+        const result = await response.json();
+        if (result.success) {
+          setSceneAnalyzers(result.data);
+        } else {
+          console.error('Load scene analyzers failed:', result.error);
+          toast.error(`加载场景分析器失败: ${result.error}`);
+        }
       } else {
         toast.error('加载场景分析器失败');
       }
@@ -105,8 +110,12 @@ export default function SceneAnalyzerManager() {
     try {
       const response = await fetch('/api/admin/providers');
       if (response.ok) {
-        const data = await response.json();
-        setProviders(data.filter((p: LLMProvider) => p.isActive));
+        const result = await response.json();
+        if (result.success) {
+          setProviders(result.data.filter((p: LLMProvider) => p.isActive));
+        } else {
+          console.error('Load providers failed:', result.error);
+        }
       }
     } catch (error) {
       console.error('Load providers error:', error);
@@ -115,10 +124,14 @@ export default function SceneAnalyzerManager() {
 
   const loadModels = async (providerId: string) => {
     try {
-      const response = await fetch(`/api/admin/providers/${providerId}/models`);
+      const response = await fetch(`/api/admin/models?providerId=${providerId}`);
       if (response.ok) {
-        const data = await response.json();
-        setModels(data.filter((m: LLMModel) => m.isActive));
+        const result = await response.json();
+        if (result.success) {
+          setModels(result.data.filter((m: LLMModel) => m.isActive));
+        } else {
+          console.error('Load models failed:', result.error);
+        }
       }
     } catch (error) {
       console.error('Load models error:', error);

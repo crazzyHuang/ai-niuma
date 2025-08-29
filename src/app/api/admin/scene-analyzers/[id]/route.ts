@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/auth';
 import prisma from '@/lib/db';
+import { APIResponseHelper } from '@/types/api'
 
 /**
  * 更新场景分析器配置
@@ -12,7 +13,10 @@ export async function PUT(
   try {
     const user = await verifyAuth(request);
     if (!user || user.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        APIResponseHelper.error('Unauthorized', 'API error'),
+        { status: 401 }
+      );
     }
 
     const { id } = await params;
@@ -72,14 +76,16 @@ export async function PUT(
     });
 
     console.log('✅ 场景分析器更新成功:', updatedAnalyzer.name);
-    return NextResponse.json(updatedAnalyzer);
+    return NextResponse.json(
+        APIResponseHelper.success(updatedAnalyzer)
+      );
 
   } catch (error) {
     console.error('Error updating scene analyzer:', error);
     return NextResponse.json(
-      { error: 'Failed to update scene analyzer' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('Failed to update scene analyzer', 'API error'),
+        { status: 500 }
+      );
   }
 }
 
@@ -93,7 +99,10 @@ export async function DELETE(
   try {
     const user = await verifyAuth(request);
     if (!user || user.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        APIResponseHelper.error('Unauthorized', 'API error'),
+        { status: 401 }
+      );
     }
 
     const { id } = await params;
@@ -108,8 +117,8 @@ export async function DELETE(
   } catch (error) {
     console.error('Error deleting scene analyzer:', error);
     return NextResponse.json(
-      { error: 'Failed to delete scene analyzer' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('Failed to delete scene analyzer', 'API error'),
+        { status: 500 }
+      );
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import Orchestrator from '@/lib/orchestrator';
+import { APIResponseHelper } from '@/types/api'
 
 export const runtime = 'nodejs';
 
@@ -17,7 +18,7 @@ export async function POST(
 
     if (!text || typeof text !== 'string') {
       return NextResponse.json(
-        { error: '消息内容不能为空' },
+        APIResponseHelper.error('消息内容不能为空', 'API error'),
         { status: 400 }
       );
     }
@@ -29,7 +30,7 @@ export async function POST(
 
     if (!conversation) {
       return NextResponse.json(
-        { error: '对话不存在' },
+        APIResponseHelper.error('对话不存在', 'API error'),
         { status: 404 }
       );
     }
@@ -80,11 +81,11 @@ export async function POST(
     console.error('聊天API错误:', error);
     
     return NextResponse.json(
-      { 
+        APIResponseHelper.success({ 
         error: '处理消息时出错',
         details: error instanceof Error ? error.message : '未知错误'
       },
-      { status: 500 }
-    );
+      { status: 500 })
+      );
   }
 }

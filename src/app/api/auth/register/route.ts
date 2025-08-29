@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
+import { APIResponseHelper } from '@/types/api'
 
 const prisma = new PrismaClient()
 
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
     // Input validation
     if (!name || !email || !password) {
       return NextResponse.json(
-        { message: '姓名、邮箱和密码不能为空' },
+        APIResponseHelper.error('姓名、邮箱和密码不能为空', 'Name, email and password are required'),
         { status: 400 }
       )
     }
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     // Name validation
     if (name.trim().length < 2) {
       return NextResponse.json(
-        { message: '姓名至少需要2个字符' },
+        APIResponseHelper.error('姓名至少需要2个字符', 'API error'),
         { status: 400 }
       )
     }
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       return NextResponse.json(
-        { message: '请输入有效的邮箱地址' },
+        APIResponseHelper.error('请输入有效的邮箱地址', 'API error'),
         { status: 400 }
       )
     }
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     // Password strength validation
     if (password.length < 6) {
       return NextResponse.json(
-        { message: '密码至少需要6位字符' },
+        APIResponseHelper.error('密码至少需要6位字符', 'API error'),
         { status: 400 }
       )
     }
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     if (password.length < 8 || strengthScore < 3) {
       return NextResponse.json(
-        { message: '密码强度不足，请包含大小写字母、数字和特殊字符，且不少于8位' },
+        APIResponseHelper.error('密码强度不足，请包含大小写字母、数字和特殊字符，且不少于8位', 'API error'),
         { status: 400 }
       )
     }
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     if (existingUser) {
       return NextResponse.json(
-        { message: '该邮箱地址已被注册，请使用其他邮箱或直接登录' },
+        APIResponseHelper.error('该邮箱地址已被注册，请使用其他邮箱或直接登录', 'API error'),
         { status: 409 }
       )
     }
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     if (!JWT_SECRET) {
       console.error('JWT_SECRET environment variable is not set')
       return NextResponse.json(
-        { message: '服务器配置错误' },
+        APIResponseHelper.error('服务器配置错误', 'API error'),
         { status: 500 }
       )
     }
@@ -115,11 +116,21 @@ export async function POST(request: NextRequest) {
     )
 
     // Return success response with user data and token
-    return NextResponse.json({
-      message: '注册成功',
-      token,
-      user: newUser,
-    }, { status: 201 })
+    const userData = {
+      id: newUser.id,
+      email: newUser.email,
+      name: newUser.name,
+      role: newUser.role,
+      plan: newUser.plan
+    };
+
+    return NextResponse.json(
+        APIResponseHelper.success({
+          token,
+          user: userData
+        }, '注册成功'),
+        { status: 201 }
+      )
 
   } catch (error) {
     console.error('Registration error:', error)
@@ -128,23 +139,23 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error) {
       if (error.message.includes('Unique constraint failed')) {
         return NextResponse.json(
-          { message: '该邮箱地址已被注册，请使用其他邮箱' },
-          { status: 409 }
-        )
+        APIResponseHelper.error('该邮箱地址已被注册，请使用其他邮箱', 'API error'),
+        { status: 409 }
+      )
       }
       
       if (error.message.includes('connection')) {
         return NextResponse.json(
-          { message: '数据库连接错误，请稍后重试' },
-          { status: 503 }
-        )
+        APIResponseHelper.error('数据库连接错误，请稍后重试', 'API error'),
+        { status: 503 }
+      )
       }
     }
 
     return NextResponse.json(
-      { message: '服务器内部错误，请稍后重试' },
-      { status: 500 }
-    )
+        APIResponseHelper.error('服务器内部错误，请稍后重试', 'API error'),
+        { status: 500 }
+      )
   } finally {
     await prisma.$disconnect()
   }

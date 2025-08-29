@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import LLMConfigManager from '@/lib/llm-config';
 import llmService from '@/lib/llm-service';
 import { LLMProvider } from '@/types/llm';
+import { APIResponseHelper } from '@/types/api'
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,7 +68,8 @@ export async function GET(request: NextRequest) {
     // 检查系统整体配置
     const systemValidation = LLMConfigManager.validateConfiguration();
 
-    return NextResponse.json({
+    return NextResponse.json(
+        APIResponseHelper.success({
       providers: configStatus,
       systemStatus: {
         isValid: systemValidation.isValid,
@@ -75,7 +77,8 @@ export async function GET(request: NextRequest) {
       },
       summary: {
         total: configStatus.length,
-        configured: configStatus.filter(p => p.status === 'configured').length,
+        configured: configStatus.filter(p => p.status === 'configured')
+      ).length,
         missing: configStatus.filter(p => p.status === 'missing').length,
         errors: configStatus.filter(p => p.status === 'error').length,
       },
@@ -84,11 +87,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Config status check failed:', error);
     return NextResponse.json(
-      { 
+        APIResponseHelper.success({ 
         error: 'Failed to check configuration status',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
-    );
+      { status: 500 })
+      );
   }
 }

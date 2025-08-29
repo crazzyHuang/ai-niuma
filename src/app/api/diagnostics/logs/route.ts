@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import diagnosticService from '@/lib/diagnostic-service';
+import { APIResponseHelper } from '@/types/api'
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,13 +28,16 @@ export async function GET(request: NextRequest) {
     // 限制返回数量
     const limitedLogs = logBuffer.slice(0, limit);
 
-    return NextResponse.json(limitedLogs);
+    return NextResponse.json(
+        APIResponseHelper.success(limitedLogs)
+      );
     
   } catch (error) {
     console.error('获取系统日志失败:', error);
     
     return NextResponse.json(
-      { error: '获取系统日志失败', details: error instanceof Error ? error.message : String(error) },
+        APIResponseHelper.success({ error: '获取系统日志失败', details: error instanceof Error ? error.message : String(error)
+      ) },
       { status: 500 }
     );
   }

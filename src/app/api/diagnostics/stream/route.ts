@@ -6,6 +6,7 @@
 
 import { NextRequest } from 'next/server';
 import diagnosticService from '@/lib/diagnostic-service';
+import { APIResponseHelper } from '@/types/api'
 
 export async function GET(request: NextRequest) {
   // 设置SSE响应头

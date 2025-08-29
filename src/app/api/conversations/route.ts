@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { APIResponseHelper } from '@/types/api'
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
     
     if (!userId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        APIResponseHelper.error('Unauthorized', 'API error'),
         { status: 401 }
       );
     }
@@ -18,13 +19,15 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json(conversations);
+    return NextResponse.json(
+        APIResponseHelper.success(conversations)
+      );
   } catch (error) {
     console.error('Error fetching conversations:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch conversations' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('Failed to fetch conversations', 'API error'),
+        { status: 500 }
+      );
   }
 }
 
@@ -34,7 +37,7 @@ export async function POST(request: NextRequest) {
     
     if (!title || !mode) {
       return NextResponse.json(
-        { error: 'Title and mode are required' },
+        APIResponseHelper.error('Title and mode are required', 'API error'),
         { status: 400 }
       );
     }
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
     
     if (!userId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        APIResponseHelper.error('Unauthorized', 'API error'),
         { status: 401 }
       );
     }
@@ -58,17 +61,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
+    return NextResponse.json(
+        APIResponseHelper.success({
       id: conversation.id,
       title: conversation.title,
       mode: conversation.mode,
       selectedAgents: conversation.selectedAgents,
-    });
+    })
+      );
   } catch (error) {
     console.error('Error creating conversation:', error);
     return NextResponse.json(
-      { error: 'Failed to create conversation' },
-      { status: 500 }
-    );
+        APIResponseHelper.error('Failed to create conversation', 'API error'),
+        { status: 500 }
+      );
   }
 }
