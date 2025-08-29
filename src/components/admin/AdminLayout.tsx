@@ -22,12 +22,16 @@ const ProvidersPage = dynamic(() => import('@/app/admin/providers/page'), {
   ssr: false,
   loading: () => <div className="p-6 text-center">加载中...</div>
 });
+const SceneAnalyzersManager = dynamic(() => import('@/components/admin/SceneAnalyzerManager'), { 
+  ssr: false,
+  loading: () => <div className="p-6 text-center">加载中...</div>
+});
 
 interface AdminLayoutProps {
   children?: React.ReactNode;
 }
 
-export type AdminPage = 'dashboard' | 'agents' | 'providers' | 'prompts' | 'groups' | 'conversations' | 'monitoring' | 'settings';
+export type AdminPage = 'dashboard' | 'agents' | 'providers' | 'scene-analyzers' | 'prompts' | 'groups' | 'conversations' | 'monitoring' | 'settings';
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -41,6 +45,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         return <AgentsPage />;
       case 'providers':
         return <ProvidersPage />;
+      case 'scene-analyzers':
+        return <SceneAnalyzersManager />;
       case 'prompts':
         return (
           <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">

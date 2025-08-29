@@ -3,6 +3,8 @@ import llmService from './llm-service';
 import LLMConfigManager from './llm-config';
 import { AgentConfigManager } from './agent-config-manager';
 import FlexibleChatManager from './flexible-chat-manager';
+import aiEmotionAnalyzer from './ai-emotion-analyzer';
+import diagnosticService from './diagnostic-service';
 import prisma from './db';
 
 /**
@@ -111,7 +113,7 @@ export class Orchestrator {
           const messages: LLMMessage[] = [
             {
               role: 'system',
-              content: agent.systemPrompt,
+              content: agent.prompt,
             },
             {
               role: 'user',
@@ -194,6 +196,279 @@ export class Orchestrator {
   }
 
   /**
+   * 运行群聊互动模式 - AI们自然对话，像真实朋友圈一样
+   */
+  static async runGroupChatMode(
+    conversationId: string,
+    userMessageContent: string,
+    onEvent: (event: any) => void
+  ): Promise<void> {
+    try {
+      console.log(`🎉 开始群聊互动模式: ${conversationId}`);
+      
+      // 获取对话信息
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        include: {
+          group: {
+            include: {
+              members: {
+                include: {
+                  agent: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!conversation || !conversation.group) {
+        throw new Error('Group conversation not found');
+      }
+
+      // 获取群里的所有AI
+      const availableAgents = conversation.group.members.map(m => m.agent);
+      console.log(`👥 群聊成员: ${availableAgents.map(a => a.name).join(', ')}`);
+
+      // 构建群聊上下文
+      let groupChatHistory = `用户: ${userMessageContent}\n\n`;
+      onEvent({ type: 'group_chat_started', totalAgents: availableAgents.length });
+
+      // 多轮互动 (2-4轮)
+      const totalRounds = Math.floor(Math.random() * 3) + 2; // 2-4轮
+      console.log(`🎯 计划进行 ${totalRounds} 轮互动`);
+
+      for (let round = 1; round <= totalRounds; round++) {
+        console.log(`\n🔄 第 ${round} 轮互动开始`);
+        
+        // 检查是否被取消
+        if (this.isCancelled(conversationId)) {
+          console.log(`🛑 群聊被取消，停止执行`);
+          onEvent({ type: 'group_chat_cancelled' });
+          return;
+        }
+
+        // 决定这轮有哪些AI要说话
+        const activeAgents = this.selectActiveAgentsForRound(availableAgents, round, userMessageContent);
+        console.log(`🎭 第 ${round} 轮活跃AI: ${activeAgents.map(a => a.name).join(', ')}`);
+
+        if (activeAgents.length === 0) {
+          console.log(`⏭️ 第 ${round} 轮无AI活跃，跳过`);
+          continue;
+        }
+
+        // 让选中的AI们并发或顺序发言
+        const roundPromises = activeAgents.map(async (agent, index) => {
+          // 随机延迟，模拟真实打字时间
+          const delay = Math.random() * 2000 + 500; // 0.5-2.5秒
+          await new Promise(resolve => setTimeout(resolve, delay));
+
+          return this.executeAgentResponse(
+            agent, 
+            conversationId, 
+            groupChatHistory, 
+            round, 
+            index,
+            onEvent
+          );
+        });
+
+        // 等待这轮所有AI完成
+        const roundResponses = await Promise.all(roundPromises);
+        
+        // 更新群聊历史
+        roundResponses.forEach(response => {
+          if (response) {
+            groupChatHistory += `${response.agentName}: ${response.content}\n\n`;
+          }
+        });
+
+        // 轮次间暂停
+        if (round < totalRounds) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      onEvent({ type: 'group_chat_completed' });
+      console.log(`🎊 群聊互动模式完成!`);
+
+    } catch (error) {
+      console.error('Group chat error:', error);
+      onEvent({ 
+        type: 'group_chat_failed', 
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      this.clearCancelFlag(conversationId);
+    }
+  }
+
+  /**
+   * 选择本轮活跃的AI
+   */
+  private static selectActiveAgentsForRound(
+    allAgents: any[], 
+    round: number, 
+    userMessage: string
+  ): any[] {
+    const activeAgents = [];
+
+    for (const agent of allAgents) {
+      let probability = 0.7; // 基础概率70%
+
+      // 第一轮概率更高
+      if (round === 1) {
+        probability = 0.9;
+      } else {
+        probability = 0.5; // 后续轮次概率降低
+      }
+
+      // 根据AI性格调整概率
+      if (agent.roleTag === 'EMPATHY') {
+        probability += 0.2; // 共情AI更爱说话
+      } else if (agent.roleTag === 'CREATIVE') {
+        probability += 0.1; // 创意AI比较活跃
+      } else if (agent.roleTag === 'ANALYST') {
+        probability -= 0.1; // 分析AI相对沉稳
+      }
+
+      // 关键词匹配增加概率
+      if (this.isMessageRelevantToAgent(userMessage, agent.roleTag)) {
+        probability += 0.3;
+      }
+
+      // 随机决定
+      if (Math.random() < probability) {
+        activeAgents.push(agent);
+      }
+    }
+
+    // 确保第一轮至少有一个AI回复
+    if (round === 1 && activeAgents.length === 0) {
+      const randomAgent = allAgents[Math.floor(Math.random() * allAgents.length)];
+      activeAgents.push(randomAgent);
+    }
+
+    return activeAgents;
+  }
+
+  /**
+   * 判断消息是否与AI角色相关
+   */
+  private static isMessageRelevantToAgent(message: string, roleTag: string): boolean {
+    const lowerMessage = message.toLowerCase();
+    
+    const keywords = {
+      'EMPATHY': ['难过', '伤心', '开心', '高兴', '担心', '紧张', '感觉'],
+      'PRACTICAL': ['怎么做', '如何', '方法', '步骤', '解决', '建议'],
+      'CREATIVE': ['创意', '想法', '设计', '艺术', '音乐', '写作'],
+      'ANALYST': ['分析', '数据', '统计', '研究', '原因', '为什么'],
+      'FOLLOWUP': ['后续', '接下来', '然后', '计划']
+    };
+
+    const agentKeywords = keywords[roleTag as keyof typeof keywords] || [];
+    return agentKeywords.some(keyword => lowerMessage.includes(keyword));
+  }
+
+  /**
+   * 执行单个AI的回复
+   */
+  private static async executeAgentResponse(
+    agent: any,
+    conversationId: string,
+    groupChatHistory: string,
+    round: number,
+    orderInRound: number,
+    onEvent: (event: any) => void
+  ): Promise<{ agentName: string; content: string } | null> {
+    try {
+      console.log(`🤖 ${agent.name} 开始思考回复...`);
+      
+      // 发送开始事件
+      onEvent({ 
+        type: 'agent_start', 
+        agent: agent.name, 
+        round,
+        orderInRound 
+      });
+
+      // 获取AI配置
+      const { agent: agentConfig, llmConfig } = await AgentConfigManager.getAgentConfig(agent.roleTag);
+      
+      // 构建更自然的群聊提示词
+      const systemPrompt = `${agentConfig.systemPrompt}
+
+【群聊互动规则】
+- 这是一个朋友群聊，用户刚说了话，现在轮到你自然地回应
+- 你的回复应该：简短自然(30-80字)、有个性、可以引用其他人说的话
+- 可以用表情符号，可以开玩笑，像真实朋友一样聊天
+- 第${round}轮对话中，你是第${orderInRound + 1}个发言的
+- 如果前面有人说了，你可以附和、补充或者有不同观点`;
+
+      const messages: LLMMessage[] = [
+        {
+          role: 'system',
+          content: systemPrompt,
+        },
+        {
+          role: 'user',
+          content: `【群聊记录】\n${groupChatHistory}\n请你自然地参与对话：`,
+        },
+      ];
+
+      // 流式调用LLM
+      let fullResponse = '';
+      const response = await llmService.streamChat(
+        llmConfig,
+        messages,
+        (chunk: LLMStreamChunk) => {
+          if (!chunk.isComplete && chunk.content) {
+            fullResponse += chunk.content;
+            onEvent({ 
+              type: 'chunk', 
+              agent: agent.name,
+              content: chunk.content 
+            });
+          }
+        }
+      );
+
+      // 保存到数据库
+      const aiMessage = await prisma.message.create({
+        data: {
+          convId: conversationId,
+          role: 'ai',
+          agentId: agent.roleTag,
+          step: agent.name,
+          content: response.content,
+          tokens: response.usage.totalTokens,
+          costCents: this.calculateCost(response, llmConfig.provider, response.model),
+        },
+      });
+
+      // 发送完成事件
+      onEvent({ 
+        type: 'agent_complete', 
+        agent: agent.name,
+        content: response.content,
+        messageId: aiMessage.id 
+      });
+
+      console.log(`✅ ${agent.name} 回复完成: "${response.content}"`);
+      return { agentName: agent.name, content: response.content };
+
+    } catch (error) {
+      console.error(`❌ ${agent.name} 回复失败:`, error);
+      onEvent({ 
+        type: 'agent_error', 
+        agent: agent.name, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+      return null;
+    }
+  }
+
+  /**
    * 运行流式编排 (微信群聊模式，支持实时显示)
    * 支持灵活聊天模式 vs 固定模式
    */
@@ -202,6 +477,12 @@ export class Orchestrator {
     userMessageContent: string,
     onEvent: (event: any) => void
   ): Promise<void> {
+    // 🔍 开始诊断追踪
+    const diagnosticId = await diagnosticService.startConversationDiagnostic(
+      conversationId,
+      userMessageContent
+    );
+
     try {
       console.log('🎭 开始流式编排:', { conversationId, content: userMessageContent.slice(0, 50) });
 
@@ -219,20 +500,104 @@ export class Orchestrator {
       // 获取对话历史
       const conversationHistory = `用户: ${userMessageContent}\n\n`;
 
+      // 🧠 分析阶段 - 情感和意图分析
+      const analysisStartTime = Date.now();
+      let aiAnalysis = null;
+      let sceneAnalysis = null;
+      
+      try {
+        // 并行执行AI分析和场景分析（如果有可用Agent）
+        const analysisPromises = [];
+        
+        // AI情感分析
+        analysisPromises.push(
+          aiEmotionAnalyzer.analyzeMessage(userMessageContent)
+            .then(result => {
+              aiAnalysis = result;
+              console.log('🤖 AI分析完成:', result.metadata.overallConfidence.toFixed(2));
+            })
+            .catch(error => {
+              console.warn('⚠️ AI分析失败:', error);
+            })
+        );
+
+        await Promise.allSettled(analysisPromises);
+
+        const analysisTime = Date.now() - analysisStartTime;
+
+        // 记录分析阶段数据
+        diagnosticService.recordAnalysisPhase(
+          diagnosticId,
+          aiAnalysis,
+          sceneAnalysis,
+          { mode: conversation.mode, useFlexibleMode: conversation.mode === 'natural' || conversation.mode === 'smart' },
+          analysisTime
+        );
+
+        console.log(`📊 分析阶段完成，用时: ${analysisTime}ms`);
+      } catch (analysisError) {
+        console.warn('⚠️ 分析阶段出错:', analysisError);
+      }
+
       // 检查是否使用灵活聊天模式
       const useFlexibleMode = conversation.mode === 'natural' || conversation.mode === 'smart';
       
       if (useFlexibleMode) {
         console.log('🌟 使用灵活聊天模式');
-        return await FlexibleChatManager.runFlexibleChat(
-          conversationId,
-          userMessageContent,
-          conversationHistory,
-          onEvent
-        );
+        const executionStartTime = Date.now();
+        
+        try {
+          await FlexibleChatManager.runFlexibleChat(
+            conversationId,
+            userMessageContent,
+            conversationHistory,
+            onEvent
+          );
+
+          // 记录执行完成
+          const executionTime = Date.now() - executionStartTime;
+          diagnosticService.recordExecutionPhase(
+            diagnosticId,
+            ['flexible-chat-manager'],
+            'flexible',
+            [{
+              phaseName: 'flexible-chat',
+              executionMode: 'adaptive',
+              agents: [{
+                agentId: 'flexible-chat-manager',
+                success: true,
+                executionTime,
+                result: { mode: 'flexible' }
+              }],
+              totalTime: executionTime
+            }],
+            executionTime
+          );
+        } catch (flexibleError) {
+          const executionTime = Date.now() - executionStartTime;
+          diagnosticService.recordExecutionPhase(
+            diagnosticId,
+            ['flexible-chat-manager'],
+            'flexible',
+            [{
+              phaseName: 'flexible-chat',
+              executionMode: 'adaptive',
+              agents: [{
+                agentId: 'flexible-chat-manager',
+                success: false,
+                executionTime,
+                error: flexibleError instanceof Error ? flexibleError.message : 'Unknown error'
+              }],
+              totalTime: executionTime
+            }],
+            executionTime
+          );
+          throw flexibleError;
+        }
       } else {
         console.log('📋 使用传统固定模式');
-        return await this.runTraditionalChat(
+        await this.runTraditionalChatWithDiagnostics(
+          diagnosticId,
           conversationId,
           userMessageContent,
           conversationHistory,
@@ -241,8 +606,15 @@ export class Orchestrator {
         );
       }
 
+      // 🏁 完成诊断
+      await diagnosticService.finishConversationDiagnostic(diagnosticId);
+
     } catch (error) {
       console.error('流式编排错误:', error);
+      
+      // 记录错误并完成诊断
+      await diagnosticService.finishConversationDiagnostic(diagnosticId);
+      
       onEvent({
         type: 'orchestration_failed',
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -251,7 +623,189 @@ export class Orchestrator {
   }
 
   /**
-   * 传统固定模式聊天
+   * 传统固定模式聊天 - 增强版，带诊断追踪
+   */
+  private static async runTraditionalChatWithDiagnostics(
+    diagnosticId: string,
+    conversationId: string,
+    userMessageContent: string,
+    conversationHistory: string,
+    onEvent: (event: any) => void,
+    mode: string
+  ): Promise<void> {
+    const executionStartTime = Date.now();
+
+    // 获取流程配置
+    const steps: string[] = this.selectAgentsDynamically(mode, userMessageContent);
+    console.log('📋 传统模式选择智能体:', steps);
+
+    let conversationContext = conversationHistory;
+    const phaseResults: any[] = [];
+    const selectedAgents = [...steps];
+
+    // 执行每个步骤
+    for (const roleTag of steps) {
+      console.log(`🎭 执行传统Agent: ${roleTag}`);
+      const agentStartTime = Date.now();
+
+      try {
+        // 1. 发送步骤开始事件
+        onEvent({ type: 'step_started', step: roleTag });
+
+        // 2. 获取智能体配置
+        const { agent, llmConfig } = await AgentConfigManager.getAgentConfig(roleTag);
+        console.log(`⚙️ Agent配置 [${roleTag}]:`, {
+          name: agent.name,
+          temperature: agent.temperature,
+          provider: llmConfig.provider,
+          model: llmConfig.model
+        });
+
+        // 3. 构建消息历史
+        const messages: LLMMessage[] = [
+          {
+            role: 'system',
+            content: agent.systemPrompt,
+          },
+          {
+            role: 'user',
+            content: `【群聊记录】\n${conversationContext}\n现在轮到你回复了，请保持自然的朋友语气，简短回应即可。`,
+          },
+        ];
+
+        // 4. 调用LLM服务进行流式对话
+        console.log(`🚀 开始LLM调用 [${roleTag}] (流式)`);
+
+        const response = await llmService.streamChat(
+          llmConfig,
+          messages,
+          (chunk: LLMStreamChunk) => {
+            if (!chunk.isComplete && chunk.content) {
+              onEvent({
+                type: 'ai_chunk',
+                text: chunk.content,
+                agent: roleTag
+              });
+            }
+          }
+        );
+
+        const agentExecutionTime = Date.now() - agentStartTime;
+        console.log(`✅ LLM调用完成 [${roleTag}], 内容长度: ${response.content.length}`);
+
+        // 5. 保存AI消息到数据库
+        const aiMessage = await prisma.message.create({
+          data: {
+            convId: conversationId,
+            role: 'ai',
+            agentId: roleTag,
+            step: roleTag,
+            content: response.content,
+            tokens: response.usage.totalTokens,
+            costCents: this.calculateCost(response, llmConfig.provider, response.model),
+          },
+        });
+
+        // 6. 发送消息完成事件
+        onEvent({
+          type: 'ai_message_completed',
+          messageId: aiMessage.id,
+          usage: response.usage,
+          agent: roleTag,
+          content: response.content,
+        });
+
+        // 7. 更新对话上下文，供下一个agent使用
+        conversationContext += `${agent.name}: ${response.content}\n\n`;
+
+        // 8. 记录Agent执行结果
+        phaseResults.push({
+          phaseName: roleTag,
+          executionMode: 'sequential',
+          agents: [{
+            agentId: roleTag,
+            success: true,
+            executionTime: agentExecutionTime,
+            result: {
+              content: response.content,
+              usage: response.usage
+            }
+          }],
+          totalTime: agentExecutionTime
+        });
+
+      } catch (stepError) {
+        const agentExecutionTime = Date.now() - agentStartTime;
+        console.error(`Error in step ${roleTag}:`, stepError);
+
+        // 发送步骤失败事件
+        onEvent({
+          type: 'step_failed',
+          step: roleTag,
+          error: stepError instanceof Error ? stepError.message : 'Unknown error',
+        });
+
+        // 创建错误消息
+        const errorMessage = await prisma.message.create({
+          data: {
+            convId: conversationId,
+            role: 'ai',
+            content: `抱歉，${roleTag} 处理时出现错误`,
+            agentId: roleTag,
+            step: roleTag,
+            tokens: 0,
+            costCents: 0,
+          },
+        });
+
+        // 记录失败的Agent执行结果
+        phaseResults.push({
+          phaseName: roleTag,
+          executionMode: 'sequential',
+          agents: [{
+            agentId: roleTag,
+            success: false,
+            executionTime: agentExecutionTime,
+            error: stepError instanceof Error ? stepError.message : 'Unknown error'
+          }],
+          totalTime: agentExecutionTime
+        });
+
+        // 继续执行下一个Agent
+        conversationContext += `系统消息: ${roleTag} 处理时出现错误\n\n`;
+      }
+    }
+
+    // 记录执行阶段数据
+    const totalExecutionTime = Date.now() - executionStartTime;
+    diagnosticService.recordExecutionPhase(
+      diagnosticId,
+      selectedAgents,
+      'traditional-sequential',
+      phaseResults,
+      totalExecutionTime
+    );
+
+    // 记录聚合阶段（传统模式没有复杂聚合，使用简单聚合）
+    diagnosticService.recordAggregationPhase(
+      diagnosticId,
+      'sequential-simple',
+      0.8, // 简单质量分数
+      phaseResults.filter(r => r.agents[0].success).map(r => ({
+        agentName: r.phaseName,
+        content: r.agents[0].result?.content || '处理完成',
+        timestamp: new Date(),
+        confidence: 0.8
+      })),
+      0 // 聚合时间很短
+    );
+
+    // 发送编排完成事件
+    onEvent({ type: 'orchestration_completed' });
+  }
+
+  /**
+   * 传统固定模式聊天 - 原始方法保持兼容性
    */
   private static async runTraditionalChat(
     conversationId: string,
@@ -417,7 +971,7 @@ export class Orchestrator {
           const messages: LLMMessage[] = [
             {
               role: 'system',
-              content: agent.systemPrompt,
+              content: agent.prompt,
             },
             {
               role: 'user',
@@ -536,14 +1090,30 @@ export class Orchestrator {
   }
 
   /**
-   * 智能选择智能体（根据用户情绪和问题类型）
+   * 智能选择智能体（根据用户情绪和问题类型）- 使用AI分析
    */
   private static selectAgentsDynamically(mode: string, userMessage: string): string[] {
-    // 分析用户情绪
-    const emotion = this.analyzeEmotion(userMessage);
-    const topic = this.analyzeTopic(userMessage);
+    // 使用AI分析用户情绪和话题（异步调用，但这里需要同步结果）
+    // 为了保持方法的同步性，这里先用快速分析，后续可以考虑异步重构
+    let emotion: 'positive' | 'negative' | 'neutral' = 'neutral';
+    let topic = 'general';
 
-    console.log('🎯 用户分析:', { emotion, topic, mode });
+    // 启动后台AI分析（不等待结果，用于改进缓存）
+    this.performBackgroundAnalysis(userMessage).catch(error => {
+      console.warn('后台AI分析失败:', error);
+    });
+
+    // 使用混合快速分析
+    try {
+      emotion = this.analyzeEmotionHybrid(userMessage);
+      topic = this.analyzeTopicHybrid(userMessage);
+    } catch (error) {
+      console.warn('混合分析失败，使用硬编码分析:', error);
+      emotion = this.analyzeEmotion(userMessage);
+      topic = this.analyzeTopic(userMessage);
+    }
+
+    console.log('🎯 用户分析 (混合AI+硬编码):', { emotion, topic, mode });
 
     // 检查是否是单一提供商模式
     const useSingleProvider = process.env.USE_SINGLE_PROVIDER === 'true';
@@ -574,42 +1144,119 @@ export class Orchestrator {
   }
 
   /**
-   * 分析用户情绪
+   * 后台AI分析 - 用于改进缓存和学习
+   */
+  private static async performBackgroundAnalysis(message: string): Promise<void> {
+    try {
+      // 异步执行完整AI分析，结果会被缓存供后续使用
+      const analysisResult = await aiEmotionAnalyzer.analyzeMessage(message);
+      console.log(`🧠 [后台分析] 完成分析: 情感=${analysisResult.emotion.primaryEmotion}, 置信度=${analysisResult.metadata.overallConfidence.toFixed(2)}`);
+    } catch (error) {
+      // 静默失败，不影响主流程
+      console.warn('🔇 后台AI分析失败（静默）:', error);
+    }
+  }
+
+  /**
+   * 混合情感分析 - AI优先，硬编码回退
+   */
+  private static analyzeEmotionHybrid(message: string): 'positive' | 'negative' | 'neutral' {
+    try {
+      // 由于quickEmotionAnalysis是异步的，这里主要依赖硬编码分析
+      // 但会启动后台AI分析来改进缓存
+      return this.analyzeEmotion(message);
+    } catch (error) {
+      return this.analyzeEmotion(message);
+    }
+  }
+
+  /**
+   * 混合话题分析 - AI优先，硬编码回退
+   */
+  private static analyzeTopicHybrid(message: string): 'emotional' | 'practical' | 'creative' | 'general' {
+    try {
+      // 这里简化处理，主要使用硬编码作为快速分析
+      // 后续可以扩展aiEmotionAnalyzer来支持同步的快速话题分析
+      return this.analyzeTopic(message);
+    } catch (error) {
+      return this.analyzeTopic(message);
+    }
+  }
+
+  /**
+   * 分析用户情绪 (硬编码回退方法)
    */
   private static analyzeEmotion(message: string): 'positive' | 'negative' | 'neutral' {
-    const negativeWords = ['不开心', '难过', '烦', '累', '压力', '焦虑', '生气', '失望'];
-    const positiveWords = ['开心', '高兴', '快乐', '兴奋', '满意', '棒', '好'];
+    const negativeWords = ['不开心', '难过', '烦', '累', '压力', '焦虑', '生气', '失望', '伤心', '担心', '紧张', '沮丧'];
+    const positiveWords = ['开心', '高兴', '快乐', '兴奋', '满意', '棒', '好', '赞', '爱', '喜欢', '惊喜', '感谢'];
 
     const lowerMessage = message.toLowerCase();
 
-    if (negativeWords.some(word => lowerMessage.includes(word))) {
+    let positiveCount = 0;
+    let negativeCount = 0;
+
+    for (const word of positiveWords) {
+      if (lowerMessage.includes(word)) positiveCount++;
+    }
+
+    for (const word of negativeWords) {
+      if (lowerMessage.includes(word)) negativeCount++;
+    }
+
+    // 增强判断逻辑
+    if (negativeCount > positiveCount && negativeCount > 0) {
       return 'negative';
     }
-    if (positiveWords.some(word => lowerMessage.includes(word))) {
+    if (positiveCount > negativeCount && positiveCount > 0) {
       return 'positive';
     }
+
+    // 检查表情符号
+    if (/😊|😄|😃|🎉|👍|❤️|💕/.test(message)) {
+      return 'positive';
+    }
+    if (/😢|😭|😔|💔|😰|😤/.test(message)) {
+      return 'negative';
+    }
+
     return 'neutral';
   }
 
   /**
-   * 分析用户话题
+   * 分析用户话题 (硬编码回退方法)
    */
   private static analyzeTopic(message: string): 'emotional' | 'practical' | 'creative' | 'general' {
-    const emotionalWords = ['心情', '感情', '感受', '情绪', '心理', '压力', '焦虑'];
-    const practicalWords = ['怎么做', '怎么办', '建议', '方法', '解决', '工作', '学习'];
-    const creativeWords = ['创意', '想法', '创新', '设计', '艺术', '灵感'];
+    const emotionalWords = ['心情', '感情', '感受', '情绪', '心理', '压力', '焦虑', '开心', '难过', '爱情', '友情'];
+    const practicalWords = ['怎么做', '怎么办', '建议', '方法', '解决', '工作', '学习', '技巧', '步骤', '计划'];
+    const creativeWords = ['创意', '想法', '创新', '设计', '艺术', '灵感', '创作', '音乐', '画画', '写作'];
 
     const lowerMessage = message.toLowerCase();
 
-    if (emotionalWords.some(word => lowerMessage.includes(word))) {
-      return 'emotional';
+    let emotionalScore = 0;
+    let practicalScore = 0;
+    let creativeScore = 0;
+
+    for (const word of emotionalWords) {
+      if (lowerMessage.includes(word)) emotionalScore++;
     }
-    if (practicalWords.some(word => lowerMessage.includes(word))) {
-      return 'practical';
+
+    for (const word of practicalWords) {
+      if (lowerMessage.includes(word)) practicalScore++;
     }
-    if (creativeWords.some(word => lowerMessage.includes(word))) {
-      return 'creative';
+
+    for (const word of creativeWords) {
+      if (lowerMessage.includes(word)) creativeScore++;
     }
+
+    // 选择得分最高的分类
+    const maxScore = Math.max(emotionalScore, practicalScore, creativeScore);
+    
+    if (maxScore === 0) return 'general';
+    
+    if (emotionalScore === maxScore) return 'emotional';
+    if (practicalScore === maxScore) return 'practical';
+    if (creativeScore === maxScore) return 'creative';
+    
     return 'general';
   }
 

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import Orchestrator from '@/lib/orchestrator';
+import intelligentOrchestrator from '@/lib/intelligent-orchestrator';
 
 export const runtime = 'nodejs';
 
 /**
  * 流式对话API (Server-Sent Events)
- * 支持实时显示每个agent的回复
+ * 使用新的智能Agent总线系统，支持真正智能的群聊体验
  */
 export async function GET(
   request: NextRequest,
@@ -34,88 +34,36 @@ export async function GET(
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // 保存用户消息到数据库
-          const userMessageRecord = await prisma.message.create({
-            data: {
-              convId: conversationId,
-              role: 'user',
-              content: userMessage,
-            },
-          });
+          console.log(`🎯 [流式API] 开始处理消息: ${userMessage.substring(0, 50)}...`);
 
-          // 发送用户消息确认
-          const userMessageData = {
-            type: 'user_message',
-            id: userMessageRecord.id,
-            content: userMessageRecord.content,
-            timestamp: userMessageRecord.createdAt,
-          };
-          controller.enqueue(`data: ${JSON.stringify(userMessageData)}\n\n`);
-
-          // 运行流式编排
-          await Orchestrator.runStreamOrchestration(
+          // 运行智能编排器
+          await intelligentOrchestrator.runIntelligentOrchestration(
             conversationId,
             userMessage,
             (event: any) => {
               try {
-                // 根据事件类型发送不同的数据
-                switch (event.type) {
-                  case 'step_started':
-                    controller.enqueue(`data: ${JSON.stringify({
-                      type: 'agent_start',
-                      agent: event.step,
-                      timestamp: new Date(),
-                    })}\n\n`);
-                    break;
+                console.log(`📡 [流式API] 发送事件: ${event.type}`, event.agent || '');
 
-                  case 'agent_chunk': // FlexibleChatManager sends 'agent_chunk', not 'ai_chunk'
-                    controller.enqueue(`data: ${JSON.stringify({
-                      type: 'chunk',
-                      agent: event.agent,
-                      content: event.content, // FlexibleChatManager sends 'content', not 'text'
-                      timestamp: new Date(),
-                    })}\n\n`);
-                    break;
+                // 统一的事件处理 - 智能编排器发送的事件已经标准化
+                const eventData = {
+                  ...event,
+                  timestamp: event.timestamp || new Date()
+                };
 
-                  case 'agent_complete': // FlexibleChatManager sends 'agent_complete'
-                    controller.enqueue(`data: ${JSON.stringify({
-                      type: 'agent_complete',
-                      agent: event.agent,
-                      content: event.content, // FlexibleChatManager includes full content
-                      timestamp: new Date(),
-                    })}\n\n`);
-                    break;
+                controller.enqueue(`data: ${JSON.stringify(eventData)}\n\n`);
 
-                  case 'conversation_complete': // FlexibleChatManager sends 'conversation_complete'
-                    controller.enqueue(`data: ${JSON.stringify({
-                      type: 'conversation_complete',
-                      timestamp: new Date(),
-                    })}\n\n`);
-                    break;
-
-                  case 'agent_error': // FlexibleChatManager sends 'agent_error'
-                    controller.enqueue(`data: ${JSON.stringify({
-                      type: 'agent_error',
-                      agent: event.agent, // FlexibleChatManager sends 'agent', not 'step'
-                      error: event.error,
-                      timestamp: new Date(),
-                    })}\n\n`);
-                    break;
-                    
-                  default:
-                    console.log('⚠️ Unhandled event type:', event.type, event);
-                    break;
-                }
               } catch (error) {
-                console.error('Error sending event:', error);
+                console.error('❌ [流式API] 发送事件失败:', error);
               }
             }
           );
 
+          console.log(`✅ [流式API] 处理完成: ${conversationId}`);
+
         } catch (error) {
-          console.error('Stream error:', error);
+          console.error('❌ [流式API] 处理失败:', error);
           controller.enqueue(`data: ${JSON.stringify({
-            type: 'error',
+            type: 'orchestration_failed',
             error: error instanceof Error ? error.message : 'Unknown error',
             timestamp: new Date(),
           })}\n\n`);

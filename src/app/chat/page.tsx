@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, MessageCircle, Users, Search, ArrowLeft, ArrowRight, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu, ChevronRight, X, Settings, LogOut, User, Trash2 } from 'lucide-react';
+import { Plus, MessageCircle, Users, Search, ArrowLeft, ArrowRight, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu, ChevronRight, X, Settings, LogOut, User, Trash2, Activity, TestTube } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 // 消息和流式数据接口
@@ -663,6 +663,14 @@ export default function ChatPage() {
                         <Settings className="mr-2 h-4 w-4" />
                         <span>设置</span>
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push('/diagnostics')}>
+                        <Activity className="mr-2 h-4 w-4" />
+                        <span>系统诊断</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push('/test')}>
+                        <TestTube className="mr-2 h-4 w-4" />
+                        <span>系统测试</span>
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={logout}>
                         <LogOut className="mr-2 h-4 w-4" />
@@ -702,6 +710,14 @@ export default function ChatPage() {
                     <DropdownMenuItem onClick={() => router.push('/admin')}>
                       <Settings className="mr-2 h-4 w-4" />
                       <span>设置</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/diagnostics')}>
+                      <Activity className="mr-2 h-4 w-4" />
+                      <span>系统诊断</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/test')}>
+                      <TestTube className="mr-2 h-4 w-4" />
+                      <span>系统测试</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={logout}>

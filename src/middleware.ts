@@ -22,6 +22,7 @@ const PUBLIC_API_ROUTES = [
   '/api/auth/register',
   '/api/auth/verify',
   '/api/auth/logout',
+  '/api/test-agent-bus', // 测试接口
 ]
 
 // Check if the path matches any of the patterns

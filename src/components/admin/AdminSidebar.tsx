@@ -13,7 +13,8 @@ import {
   Home,
   MessageSquare,
   ChevronLeft,
-  Activity
+  Activity,
+  Brain
 } from 'lucide-react';
 import { AdminPage } from './AdminLayout';
 
@@ -42,6 +43,12 @@ const navigationItems = [
     key: 'providers' as AdminPage,
     icon: Network,
     description: 'LLM提供商配置'
+  },
+  {
+    title: '场景分析',
+    key: 'scene-analyzers' as AdminPage,
+    icon: Brain,
+    description: '场景分析AI配置'
   },
   {
     title: '提示词',

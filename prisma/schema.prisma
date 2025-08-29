@@ -22,6 +22,7 @@ model User {
   createdProviders LLMProvider[]
   createdGroups ChatGroup[]
   createdFlows Flow[]
+  createdSceneAnalyzers SceneAnalyzer[]
 }
 
 model Conversation {
@@ -110,6 +111,7 @@ model LLMProvider {
   updatedAt   DateTime @updatedAt
   models      LLMModel[] // 支持多个模型
   agents      Agent[]
+  sceneAnalyzers SceneAnalyzer[]
 }
 
 // LLM模型表
@@ -128,6 +130,7 @@ model LLMModel {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   agents      Agent[]
+  sceneAnalyzers SceneAnalyzer[]
 
   @@unique([providerId, code])
 }
@@ -207,4 +210,22 @@ model Deployment {
   logsUrl   String?
   meta      Json?
   createdAt DateTime     @default(now())
+}
+
+model SceneAnalyzer {
+  id           String      @id @default(cuid())
+  name         String
+  description  String?
+  providerId   String
+  provider     LLMProvider @relation(fields: [providerId], references: [id])
+  modelId      String
+  model        LLMModel    @relation(fields: [modelId], references: [id])
+  temperature  Float       @default(0.3)
+  maxTokens    Int         @default(2000)
+  systemPrompt String
+  isActive     Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  createdBy    String
+  creator      User        @relation(fields: [createdBy], references: [id])
 }
