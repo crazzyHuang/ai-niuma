@@ -905,15 +905,19 @@ export class IntelligentAgentBus {
       
       const executionStartTime = Date.now();
       
+      // 构建正确的执行输入数据结构
+      const executionInput = {
+        request: input, // GroupChatRequest
+        analysisResult,
+        availableAgents: input.availableAgents,
+        expectedRole: agentExecution.expectedRole
+      };
+
       // 发送执行请求消息
       const executionMessage: AgentMessage = {
         id: `exec_req_${agent.id}_${Date.now()}`,
         type: 'execution_request',
-        payload: {
-          ...input,
-          expectedRole: agentExecution.expectedRole,
-          analysisResult
-        },
+        payload: executionInput,
         metadata: {
           timestamp: new Date(),
           sender: 'agent-bus',
