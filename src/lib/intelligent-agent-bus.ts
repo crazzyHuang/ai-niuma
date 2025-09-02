@@ -488,8 +488,16 @@ export class IntelligentAgentBus {
 
       console.log(`🔄 [结果聚合] 聚合完成，质量分数: ${aggregationResult.qualityScore.toFixed(2)}`);
 
+      // 调试：检查聚合结果内容
+      console.log(`📊 [调试] 聚合结果包含 ${aggregationResult.finalResponses?.length || 0} 个最终响应`);
+      if (aggregationResult.finalResponses?.length > 0) {
+        aggregationResult.finalResponses.forEach((resp, i) => {
+          console.log(`📊 [调试] 响应 ${i}: agent=${resp.agentName}, content="${resp.content?.substring(0, 50)}..."`);
+        });
+      }
+
       // 使用聚合结果
-      allResponses.push(...aggregationResult.finalResponses);
+      allResponses.push(...(aggregationResult.finalResponses || []));
 
       // 第五步：使用聚合结果的质量分数
 
