@@ -696,14 +696,26 @@ class ConsensusAggregationStrategy implements AggregationStrategy {
   }
 
   async aggregate(results: AgentResult[], context: AggregationContext): Promise<AggregatedResult> {
-    const responses = results
-      .filter(r => r.data && typeof r.data === 'object' && r.data.content)
-      .map(r => ({
-        agentName: r.data.agentName || 'unknown',
-        content: r.data.content,
-        timestamp: new Date(),
-        confidence: r.data.confidence || 0.7
-      }));
+    // 从 AgentResult 中提取 ChatbotResponse
+    const responses: any[] = [];
+    
+    results.forEach(r => {
+      if (r.data && typeof r.data === 'object') {
+        // 处理 chat-executor 返回的 ChatExecutionResult 格式
+        if (r.data.responses && Array.isArray(r.data.responses)) {
+          responses.push(...r.data.responses);
+        }
+        // 处理直接的响应格式
+        else if (r.data.content) {
+          responses.push({
+            agentName: r.data.agentName || 'unknown',
+            content: r.data.content,
+            timestamp: new Date(),
+            confidence: r.data.confidence || 0.7
+          });
+        }
+      }
+    });
 
     // 寻找共同主题和观点
     const consensusResponses = await this.findConsensusResponses(responses);
@@ -777,14 +789,26 @@ class QualityBasedAggregationStrategy implements AggregationStrategy {
   }
 
   async aggregate(results: AgentResult[], context: AggregationContext): Promise<AggregatedResult> {
-    const responses = results
-      .filter(r => r.data && typeof r.data === 'object' && r.data.content)
-      .map(r => ({
-        agentName: r.data.agentName || 'unknown',
-        content: r.data.content,
-        timestamp: new Date(),
-        confidence: r.data.confidence || 0.7
-      }));
+    // 从 AgentResult 中提取 ChatbotResponse
+    const responses: any[] = [];
+    
+    results.forEach(r => {
+      if (r.data && typeof r.data === 'object') {
+        // 处理 chat-executor 返回的 ChatExecutionResult 格式
+        if (r.data.responses && Array.isArray(r.data.responses)) {
+          responses.push(...r.data.responses);
+        }
+        // 处理直接的响应格式
+        else if (r.data.content) {
+          responses.push({
+            agentName: r.data.agentName || 'unknown',
+            content: r.data.content,
+            timestamp: new Date(),
+            confidence: r.data.confidence || 0.7
+          });
+        }
+      }
+    });
 
     // 按置信度排序，选择最高质量的回复
     responses.sort((a, b) => b.confidence - a.confidence);
@@ -830,14 +854,26 @@ class ThematicAggregationStrategy implements AggregationStrategy {
   }
 
   async aggregate(results: AgentResult[], context: AggregationContext): Promise<AggregatedResult> {
-    const responses = results
-      .filter(r => r.data && typeof r.data === 'object' && r.data.content)
-      .map(r => ({
-        agentName: r.data.agentName || 'unknown',
-        content: r.data.content,
-        timestamp: new Date(),
-        confidence: r.data.confidence || 0.7
-      }));
+    // 从 AgentResult 中提取 ChatbotResponse
+    const responses: any[] = [];
+    
+    results.forEach(r => {
+      if (r.data && typeof r.data === 'object') {
+        // 处理 chat-executor 返回的 ChatExecutionResult 格式
+        if (r.data.responses && Array.isArray(r.data.responses)) {
+          responses.push(...r.data.responses);
+        }
+        // 处理直接的响应格式
+        else if (r.data.content) {
+          responses.push({
+            agentName: r.data.agentName || 'unknown',
+            content: r.data.content,
+            timestamp: new Date(),
+            confidence: r.data.confidence || 0.7
+          });
+        }
+      }
+    });
 
     // 按主题分组并选择代表性回复
     const thematicResponses = await this.organizeByTheme(responses);
@@ -963,14 +999,26 @@ class EmotionalAggregationStrategy implements AggregationStrategy {
   }
 
   async aggregate(results: AgentResult[], context: AggregationContext): Promise<AggregatedResult> {
-    const responses = results
-      .filter(r => r.data && typeof r.data === 'object' && r.data.content)
-      .map(r => ({
-        agentName: r.data.agentName || 'unknown',
-        content: r.data.content,
-        timestamp: new Date(),
-        confidence: r.data.confidence || 0.7
-      }));
+    // 从 AgentResult 中提取 ChatbotResponse
+    const responses: any[] = [];
+    
+    results.forEach(r => {
+      if (r.data && typeof r.data === 'object') {
+        // 处理 chat-executor 返回的 ChatExecutionResult 格式
+        if (r.data.responses && Array.isArray(r.data.responses)) {
+          responses.push(...r.data.responses);
+        }
+        // 处理直接的响应格式
+        else if (r.data.content) {
+          responses.push({
+            agentName: r.data.agentName || 'unknown',
+            content: r.data.content,
+            timestamp: new Date(),
+            confidence: r.data.confidence || 0.7
+          });
+        }
+      }
+    });
 
     // 选择情感匹配度最高的回复
     const targetEmotion = context.sceneAnalysis?.emotion || 'neutral';
@@ -1045,14 +1093,26 @@ class HybridAggregationStrategy implements AggregationStrategy {
   }
 
   async aggregate(results: AgentResult[], context: AggregationContext): Promise<AggregatedResult> {
-    const responses = results
-      .filter(r => r.data && typeof r.data === 'object' && r.data.content)
-      .map(r => ({
-        agentName: r.data.agentName || 'unknown',
-        content: r.data.content,
-        timestamp: new Date(),
-        confidence: r.data.confidence || 0.7
-      }));
+    // 从 AgentResult 中提取 ChatbotResponse
+    const responses: any[] = [];
+    
+    results.forEach(r => {
+      if (r.data && typeof r.data === 'object') {
+        // 处理 chat-executor 返回的 ChatExecutionResult 格式
+        if (r.data.responses && Array.isArray(r.data.responses)) {
+          responses.push(...r.data.responses);
+        }
+        // 处理直接的响应格式
+        else if (r.data.content) {
+          responses.push({
+            agentName: r.data.agentName || 'unknown',
+            content: r.data.content,
+            timestamp: new Date(),
+            confidence: r.data.confidence || 0.7
+          });
+        }
+      }
+    });
 
     // 应用多种策略并合并结果
     const qualityFiltered = responses
