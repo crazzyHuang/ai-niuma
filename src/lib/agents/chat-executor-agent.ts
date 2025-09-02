@@ -78,7 +78,8 @@ export class ChatExecutorAgent extends BaseAgent {
     
     // 首先使用场景分析的建议
     let selectedAgents = availableAgents.filter(agent => 
-      analysisResult.participantSuggestions.includes(agent.name)
+      analysisResult.participationPlan?.some(suggestion => suggestion.agentName === agent.roleTag) ||
+      analysisResult.participationPlan?.some(suggestion => suggestion.agentName === agent.name)
     );
 
     // 如果建议的Agent不够，使用智能匹配
