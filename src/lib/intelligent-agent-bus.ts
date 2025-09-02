@@ -463,6 +463,10 @@ export class IntelligentAgentBus {
         }
 
         const phaseResults = await this.executePhaseWithRouting(phase, request, analysisResult);
+        console.log(`📊 [调试] 阶段 ${phase.name} 返回了 ${phaseResults.length} 个结果`);
+        phaseResults.forEach((result, index) => {
+          console.log(`📊 [调试] 结果 ${index}: success=${result?.success}, hasData=${!!result?.data}`);
+        });
         agentResults.push(...phaseResults);
         
         // 记录使用的Agent
