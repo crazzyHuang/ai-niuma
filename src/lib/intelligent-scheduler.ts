@@ -195,7 +195,7 @@ export class IntelligentScheduler {
     // V1需求：基于多维度评估选择最优策略
     
     // 高紧迫性场景优先选择效率策略
-    if (sceneAnalysis.userIntent.urgencyLevel > 0.8) {
+    if (sceneAnalysis.userIntent?.urgencyLevel > 0.8) {
       const efficiencyStrategy = applicableStrategies.find(s => 
         s.strategy.name.includes('Efficiency')
       );
@@ -241,14 +241,14 @@ export class IntelligentScheduler {
     const optimizedPlan = { ...plan };
 
     // 根据场景分析调整超时时间
-    if (sceneAnalysis.userIntent.urgencyLevel > 0.7) {
+    if (sceneAnalysis.userIntent?.urgencyLevel > 0.7) {
       optimizedPlan.phases.forEach(phase => {
         phase.timeout = Math.max(phase.timeout * 0.8, 5000); // 最少5秒
       });
     }
 
     // 根据社交动态调整并发度
-    if (sceneAnalysis.socialDynamics.groupCohesion < 0.5) {
+    if (sceneAnalysis.socialDynamics?.groupCohesion < 0.5) {
       optimizedPlan.phases.forEach(phase => {
         if (phase.executionMode === 'parallel') {
           phase.executionMode = 'sequential'; // 群聊凝聚力低时使用顺序执行
@@ -335,7 +335,7 @@ export class IntelligentScheduler {
       fitness += 0.3;
     }
     
-    if (strategy.name.includes('Efficiency') && sceneAnalysis.userIntent.urgencyLevel > 0.7) {
+    if (strategy.name.includes('Efficiency') && sceneAnalysis.userIntent?.urgencyLevel > 0.7) {
       fitness += 0.2;
     }
 
@@ -430,14 +430,14 @@ class SequentialStrategy implements SchedulingStrategy {
   isApplicable(sceneAnalysis: SceneAnalysisResult, availableAgents: BaseAgent[]): boolean {
     // 分析类、学习类场景适合顺序执行
     return ['learning_discussion', 'problem_solving'].includes(sceneAnalysis.sceneType) ||
-           sceneAnalysis.userIntent.expectationType === 'deep_discussion';
+           sceneAnalysis.userIntent?.expectationType === 'deep_discussion';
   }
 
   async createExecutionPlan(
     sceneAnalysis: SceneAnalysisResult, 
     availableAgents: BaseAgent[]
   ): Promise<ExecutionPlan> {
-    const selectedAgents = this.selectAgentsFromPlan(sceneAnalysis.participationPlan, availableAgents);
+    const selectedAgents = this.selectAgentsFromPlan(sceneAnalysis.participationPlan || [], availableAgents);
     
     return {
       strategyUsed: this.name,
@@ -484,16 +484,16 @@ class ParallelStrategy implements SchedulingStrategy {
   readonly description = '并行执行策略，适合需要多角度快速响应的场景';
 
   isApplicable(sceneAnalysis: SceneAnalysisResult, availableAgents: BaseAgent[]): boolean {
-    return sceneAnalysis.userIntent.urgencyLevel > 0.6 ||
+    return sceneAnalysis.userIntent?.urgencyLevel > 0.6 ||
            sceneAnalysis.sceneType === 'humor_entertainment' ||
-           sceneAnalysis.socialDynamics.groupCohesion > 0.7;
+           sceneAnalysis.socialDynamics?.groupCohesion > 0.7;
   }
 
   async createExecutionPlan(
     sceneAnalysis: SceneAnalysisResult, 
     availableAgents: BaseAgent[]
   ): Promise<ExecutionPlan> {
-    const selectedAgents = sceneAnalysis.participationPlan.slice(0, 3);
+    const selectedAgents = (sceneAnalysis.participationPlan || []).slice(0, 3);
     
     return {
       strategyUsed: this.name,
@@ -545,7 +545,7 @@ class AdaptiveDynamicStrategy implements SchedulingStrategy {
     const phases: ExecutionPhase[] = [];
     
     // 第一阶段：主要响应者
-    const primaryResponders = sceneAnalysis.participationPlan
+    const primaryResponders = (sceneAnalysis.participationPlan || [])
       .filter(p => p.roleInConversation === 'primary_responder')
       .slice(0, 2);
     
@@ -564,7 +564,7 @@ class AdaptiveDynamicStrategy implements SchedulingStrategy {
     }
     
     // 第二阶段：支持者和调节者
-    const supporters = sceneAnalysis.participationPlan
+    const supporters = (sceneAnalysis.participationPlan || [])
       .filter(p => ['supporter', 'moderator'].includes(p.roleInConversation))
       .slice(0, 2);
     
@@ -622,7 +622,7 @@ class EmotionDrivenStrategy implements SchedulingStrategy {
     availableAgents: BaseAgent[]
   ): Promise<ExecutionPlan> {
     // 情感场景优先安排共情型Agent
-    const empathyAgents = sceneAnalysis.participationPlan
+    const empathyAgents = (sceneAnalysis.participationPlan || [])
       .filter(p => p.expectedContribution.includes('情感') || p.expectedContribution.includes('支持'))
       .sort((a, b) => b.priority - a.priority);
     
@@ -667,7 +667,7 @@ class CollaborativeStrategy implements SchedulingStrategy {
     sceneAnalysis: SceneAnalysisResult, 
     availableAgents: BaseAgent[]
   ): Promise<ExecutionPlan> {
-    const creativeAgents = sceneAnalysis.participationPlan
+    const creativeAgents = (sceneAnalysis.participationPlan || [])
       .filter(p => p.roleInConversation.includes('creative') || 
                    p.expectedContribution.includes('创意'))
       .slice(0, 3);
@@ -716,8 +716,8 @@ class EfficiencyOptimizedStrategy implements SchedulingStrategy {
   readonly description = '效率优化策略，适合高紧迫性场景';
 
   isApplicable(sceneAnalysis: SceneAnalysisResult, availableAgents: BaseAgent[]): boolean {
-    return sceneAnalysis.userIntent.urgencyLevel > 0.7 ||
-           sceneAnalysis.userIntent.expectationType === 'quick_answer';
+    return sceneAnalysis.userIntent?.urgencyLevel > 0.7 ||
+           sceneAnalysis.userIntent?.expectationType === 'quick_answer';
   }
 
   async createExecutionPlan(
@@ -725,7 +725,7 @@ class EfficiencyOptimizedStrategy implements SchedulingStrategy {
     availableAgents: BaseAgent[]
   ): Promise<ExecutionPlan> {
     // 选择最高优先级的单个Agent快速响应
-    const topAgent = sceneAnalysis.participationPlan
+    const topAgent = (sceneAnalysis.participationPlan || [])
       .sort((a, b) => b.priority - a.priority)[0];
 
     return {
