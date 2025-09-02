@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { APIClient, APIResponseHelper } from '@/types/api'
 
 // Define User interface
 interface User {
@@ -104,17 +105,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Verify token with server
   const verifyTokenWithServer = async (authToken: string): Promise<boolean> => {
     try {
-      const response = await fetch('/api/auth/verify', {
+      const result = await APIClient.request('/api/auth/verify', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
       })
 
-      if (response.ok) {
-        const result = await response.json()
+      if (APIResponseHelper.isSuccess(result)) {
         // Update user data if server returns updated info
-        if (result.success && result.data) {
+        if (result.data) {
           setUser(result.data)
           setToken(authToken) // Ensure token is set
           localStorage.setItem('user', JSON.stringify(result.data))

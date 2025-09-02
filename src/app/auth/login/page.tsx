@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { Eye, EyeOff, Mail, Lock, LogIn } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { LoginLayout } from '@/components/layout/AuthLayout'
+import { APIClient, APIResponseHelper } from '@/types/api'
 
 interface LoginFormData {
   email: string
@@ -89,28 +90,20 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      })
+      const result = await APIClient.post('/api/auth/login', formData)
 
-      const data = await response.json()
-
-      if (response.ok) {
+      if (APIResponseHelper.isSuccess(result)) {
         toast.success('登录成功！')
 
         // Use AuthContext login method to update global state
-        login(data.data.token, data.data.user)
+        login(result.data.token, result.data.user)
 
         // Wait and redirect to chat page
         setTimeout(() => {
           window.location.replace('/chat')
         }, 500)
       } else {
-        toast.error(data.error || '登录失败，请稍后重试')
+        toast.error(result.error || '登录失败，请稍后重试')
       }
     } catch (error) {
       console.error('Login error:', error)

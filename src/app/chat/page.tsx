@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Plus, MessageCircle, Users, Search, ArrowLeft, ArrowRight, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu, ChevronRight, X, Settings, LogOut, User, Trash2, Activity, TestTube } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { AuthLayout } from '@/components/layout/AuthLayout';
+import { APIClient, APIResponseHelper } from '@/types/api';
 
 // 消息和流式数据接口
 interface Message {
@@ -98,18 +99,15 @@ function ChatInterface({
 
   const loadMessages = async () => {
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/messages`);
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setMessages(result.data.map((msg: any) => ({
-            id: msg.id,
-            role: msg.role,
-            content: msg.content,
-            timestamp: new Date(msg.createdAt),
-            agent: msg.step
-          })));
-        }
+      const result = await APIClient.get(`/api/conversations/${conversationId}/messages`);
+      if (APIResponseHelper.isSuccess(result)) {
+        setMessages(result.data.map((msg: any) => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date(msg.createdAt),
+          agent: msg.step
+        })));
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
@@ -510,11 +508,11 @@ export default function ChatPage() {
 
   const loadConversations = useCallback(async () => {
     try {
-      const response = await fetch('/api/conversations');
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Conversations data:', data);
+      const result = await APIClient.get('/api/conversations');
+      console.log('Conversations data:', result);
 
+      if (APIResponseHelper.isSuccess(result)) {
+        const data = result.data;
         if (Array.isArray(data)) {
           setConversations(data);
           if (data.length > 0 && !selectedConversation) {
@@ -525,7 +523,7 @@ export default function ChatPage() {
           setConversations([]);
         }
       } else {
-        console.error('Failed to load conversations, response not ok');
+        console.error('Failed to load conversations:', result.error);
         setConversations([]);
       }
     } catch (error) {
@@ -536,11 +534,9 @@ export default function ChatPage() {
 
   const deleteConversation = useCallback(async (conversationId: string) => {
     try {
-      const response = await fetch(`/api/conversations/${conversationId}`, {
-        method: 'DELETE',
-      });
+      const result = await APIClient.delete(`/api/conversations/${conversationId}`);
 
-      if (response.ok) {
+      if (APIResponseHelper.isSuccess(result)) {
         // 从对话列表中移除已删除的对话
         setConversations(prev => Array.isArray(prev) ? prev.filter(c => c.id !== conversationId) : []);
 
@@ -556,7 +552,7 @@ export default function ChatPage() {
 
         // 清空消息列表 (TODO: 需要通过props传递clear函数给ChatInterface)
       } else {
-        console.error('Failed to delete conversation');
+        console.error('Failed to delete conversation:', result.error);
         alert('删除对话失败，请重试');
       }
     } catch (error) {
@@ -567,10 +563,9 @@ export default function ChatPage() {
 
   const loadAgents = useCallback(async () => {
     try {
-      const response = await fetch('/api/agents');
-      if (response.ok) {
-        const data = await response.json();
-        setAgents(data);
+      const result = await APIClient.get('/api/agents');
+      if (APIResponseHelper.isSuccess(result)) {
+        setAgents(result.data);
       }
     } catch (error) {
       console.error('Failed to load agents:', error);
@@ -587,22 +582,16 @@ export default function ChatPage() {
     if (selectedAgents.length === 0) return;
 
     try {
-      const response = await fetch('/api/conversations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: selectedAgents.length === 1
-            ? `与 ${agents.find(a => a.id === selectedAgents[0])?.name} 的对话`
-            : `群聊: ${newGroupName || selectedAgents.map(id => agents.find(a => a.id === id)?.name).join(', ')}`,
-          mode: 'smart',
-          selectedAgents: selectedAgents, // 传递用户选择的智能体
-        }),
+      const result = await APIClient.post('/api/conversations', {
+        title: selectedAgents.length === 1
+          ? `与 ${agents.find(a => a.id === selectedAgents[0])?.name} 的对话`
+          : `群聊: ${newGroupName || selectedAgents.map(id => agents.find(a => a.id === id)?.name).join(', ')}`,
+        mode: 'smart',
+        selectedAgents: selectedAgents, // 传递用户选择的智能体
       });
 
-      if (response.ok) {
-        const newConversation = await response.json();
+      if (APIResponseHelper.isSuccess(result)) {
+        const newConversation = result.data;
         setConversations(prev => Array.isArray(prev) ? [newConversation, ...prev] : [newConversation]);
         setSelectedConversation(newConversation.id);
         setIsCreateDialogOpen(false);

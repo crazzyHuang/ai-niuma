@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Settings, Users, Workflow, ToggleLeft, ToggleRight } from 'lucide-react';
+import { APIClient, APIResponseHelper } from '@/types/api';
 
 interface ConfigInfo {
   isSingleProvider: boolean;
@@ -35,10 +36,9 @@ export default function ConfigPage() {
   const loadConfig = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/config/current');
-      if (response.ok) {
-        const data = await response.json();
-        setConfig(data);
+      const result = await APIClient.get('/api/config/current');
+      if (APIResponseHelper.isSuccess(result)) {
+        setConfig(result.data);
       }
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -49,10 +49,8 @@ export default function ConfigPage() {
 
   const toggleMode = async () => {
     try {
-      const response = await fetch('/api/config/toggle-mode', {
-        method: 'POST',
-      });
-      if (response.ok) {
+      const result = await APIClient.post('/api/config/toggle-mode');
+      if (APIResponseHelper.isSuccess(result)) {
         loadConfig(); // 重新加载配置
       }
     } catch (error) {

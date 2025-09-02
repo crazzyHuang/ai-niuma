@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Mail, Lock, User, UserPlus, Check, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { APIClient, APIResponseHelper } from '@/types/api'
 
 interface RegisterFormData {
   name: string
@@ -152,25 +153,17 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name.trim(),
-          email: formData.email,
-          password: formData.password,
-        }),
+      const result = await APIClient.post('/api/auth/register', {
+        name: formData.name.trim(),
+        email: formData.email,
+        password: formData.password,
       })
 
-      const data = await response.json()
-
-      if (response.ok) {
+      if (APIResponseHelper.isSuccess(result)) {
         toast.success('注册成功！正在为您登录...')
         
         // Use AuthContext login method to update global state
-        login(data.data.token, data.data.user)
+        login(result.data.token, result.data.user)
         
         // Wait a bit longer for cookie to be set, then redirect
         setTimeout(() => {
@@ -178,7 +171,7 @@ export default function RegisterPage() {
           window.location.replace('/chat')
         }, 500)
       } else {
-        toast.error(data.error || '注册失败，请稍后重试')
+        toast.error(result.error || '注册失败，请稍后重试')
       }
     } catch (error) {
       console.error('Register error:', error)

@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Bot, Plus, Edit, Trash2, Eye, EyeOff, Copy, Save, AlertCircle, CheckCircle, ArrowLeft, ArrowRight, Loader2, Info } from 'lucide-react';
 import Link from 'next/link';
+import { APIClient, APIResponseHelper } from '@/types/api';
 
 interface Agent {
   id: string;
@@ -98,10 +99,9 @@ export default function AgentsPage() {
   const loadAgents = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/admin/agents');
-      const result = await response.json();
+      const result = await APIClient.get('/api/admin/agents');
       
-      if (result.success) {
+      if (APIResponseHelper.isSuccess(result)) {
         setAgents(result.data);
       } else {
         console.error('加载智能体失败:', result.error);
@@ -115,10 +115,9 @@ export default function AgentsPage() {
 
   const loadProviders = async () => {
     try {
-      const response = await fetch('/api/admin/providers');
-      const result = await response.json();
+      const result = await APIClient.get('/api/admin/providers');
       
-      if (result.success) {
+      if (APIResponseHelper.isSuccess(result)) {
         setProviders(result.data);
       } else {
         console.error('加载提供商失败:', result.error);
@@ -157,28 +156,20 @@ export default function AgentsPage() {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/admin/agents', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name.trim(),
-          code: formData.code.trim().toUpperCase(),
-          description: formData.description.trim(),
-          color: formData.color,
-          temperature: formData.temperature,
-          maxTokens: formData.maxTokens,
-          prompt: formData.prompt.trim(),
-          modelId: formData.modelId,
-          isActive: formData.isActive,
-          userId: 'system' // 实际应用中从session获取
-        }),
+      const result = await APIClient.post('/api/admin/agents', {
+        name: formData.name.trim(),
+        code: formData.code.trim().toUpperCase(),
+        description: formData.description.trim(),
+        color: formData.color,
+        temperature: formData.temperature,
+        maxTokens: formData.maxTokens,
+        prompt: formData.prompt.trim(),
+        modelId: formData.modelId,
+        isActive: formData.isActive,
+        userId: 'system' // 实际应用中从session获取
       });
-
-      const result = await response.json();
       
-      if (result.success) {
+      if (APIResponseHelper.isSuccess(result)) {
         setAgents([...agents, result.data]);
         setIsCreateDialogOpen(false);
         resetForm();
@@ -206,27 +197,19 @@ export default function AgentsPage() {
     if (!editingAgent) return;
     
     try {
-      const response = await fetch(`/api/admin/agents/${editingAgent.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          code: formData.code,
-          description: formData.description,
-          color: formData.color,
-          temperature: formData.temperature,
-          maxTokens: formData.maxTokens,
-          prompt: formData.prompt,
-          modelId: formData.modelId,
-          isActive: formData.isActive
-        }),
+      const result = await APIClient.put(`/api/admin/agents/${editingAgent.id}`, {
+        name: formData.name,
+        code: formData.code,
+        description: formData.description,
+        color: formData.color,
+        temperature: formData.temperature,
+        maxTokens: formData.maxTokens,
+        prompt: formData.prompt,
+        modelId: formData.modelId,
+        isActive: formData.isActive
       });
-
-      const result = await response.json();
       
-      if (result.success) {
+      if (APIResponseHelper.isSuccess(result)) {
         setAgents(agents.map(agent =>
           agent.id === editingAgent.id ? result.data : agent
         ));
@@ -247,13 +230,9 @@ export default function AgentsPage() {
     if (!confirm('确定要删除这个智能体吗？')) return;
     
     try {
-      const response = await fetch(`/api/admin/agents/${id}`, {
-        method: 'DELETE',
-      });
-
-      const result = await response.json();
+      const result = await APIClient.delete(`/api/admin/agents/${id}`);
       
-      if (result.success) {
+      if (APIResponseHelper.isSuccess(result)) {
         if (result.data.deleted) {
           // 完全删除
           setAgents(agents.filter(agent => agent.id !== id));
