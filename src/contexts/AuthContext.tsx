@@ -55,22 +55,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Computed property for authentication status
   const isAuthenticated = !!user && !!token
 
-  // Initialize auth state from localStorage and cookies
+  // Initialize auth state from localStorage
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Try localStorage first, then cookies
-        let storedToken = localStorage.getItem('auth_token')
-        let storedUser = localStorage.getItem('user')
-        
-        // If not in localStorage, check cookies
-        if (!storedToken) {
-          const cookies = document.cookie.split(';')
-          const tokenCookie = cookies.find(c => c.trim().startsWith('auth_token='))
-          if (tokenCookie) {
-            storedToken = tokenCookie.split('=')[1]
-          }
-        }
+        // Get token and user from localStorage
+        const storedToken = localStorage.getItem('auth_token')
+        const storedUser = localStorage.getItem('user')
 
         if (storedToken) {
           // Check if token is expired
@@ -78,7 +69,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Token expired, clear storage
             localStorage.removeItem('auth_token')
             localStorage.removeItem('user')
-            document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
             setIsLoading(false)
             return
           }
@@ -122,12 +112,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       })
 
       if (response.ok) {
-        const data = await response.json()
+        const result = await response.json()
         // Update user data if server returns updated info
-        if (data.user) {
-          setUser(data.user)
+        if (result.success && result.data) {
+          setUser(result.data)
           setToken(authToken) // Ensure token is set
-          localStorage.setItem('user', JSON.stringify(data.user))
+          localStorage.setItem('user', JSON.stringify(result.data))
         }
         return true
       }
@@ -163,33 +153,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(userData)
     localStorage.setItem('auth_token', authToken)
     localStorage.setItem('user', JSON.stringify(userData))
-    
-    // Note: Cookie is now set server-side by the login API
-    // No need to set it manually here anymore
   }
 
   // Logout function
-  const logout = async () => {
-    try {
-      // Call server logout endpoint to clear cookie
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      })
-    } catch (error) {
-      console.error('Logout API error:', error)
-      // Continue with logout even if API fails
-    }
-
+  const logout = () => {
     // Clear local state and storage
     setToken(null)
     setUser(null)
     localStorage.removeItem('auth_token')
     localStorage.removeItem('user')
-    
-    // Clear cookie as fallback (in case API didn't work)
-    document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-    
+
     // Redirect to login page
     router.push('/auth/login')
     toast.info('您已成功退出登录')

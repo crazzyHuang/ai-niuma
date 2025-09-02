@@ -104,7 +104,8 @@ export async function POST(request: NextRequest) {
         code,
         baseUrl,
         apiKey,
-        isActive: isActive ?? true
+        isActive: isActive ?? true,
+        createdBy: user.userId
       }
     });
 

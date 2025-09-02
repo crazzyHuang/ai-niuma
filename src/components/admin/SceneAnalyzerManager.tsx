@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -61,6 +62,7 @@ export default function SceneAnalyzerManager() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingAnalyzer, setEditingAnalyzer] = useState<SceneAnalyzer | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -151,8 +153,65 @@ export default function SceneAnalyzerManager() {
     });
   };
 
+  // Presets for quicker configuration
+  const presets = [
+    {
+      key: 'balanced',
+      label: '均衡（通用）',
+      temperature: 0.5,
+      systemPrompt:
+        '你是一个场景分析器，识别用户消息的意图、情绪、主题与优先级，并输出结构化JSON：{intent, sentiment, topics[], urgency: 1-5, summary}。简洁准确。',
+    },
+    {
+      key: 'strict',
+      label: '严格（确定性）',
+      temperature: 0.2,
+      systemPrompt:
+        '以确定性的方式进行场景分析，仅依据消息内容输出：intent、sentiment、topics（最多3个）、urgency（1-5）、summary（<=60字）。不要发挥。',
+    },
+    {
+      key: 'creative',
+      label: '创意（发散）',
+      temperature: 0.9,
+      systemPrompt:
+        '以发散思维分析场景，提供可选方向。输出：intent、sentiment、ideas（2-3条）、risks（1-2条）、summary。保持礼貌与建设性。',
+    },
+  ];
+
+  // Match current form to a preset for controlled Select value
+  const matchedPresetKey = useMemo(() => {
+    const match = presets.find(
+      (p) => p.systemPrompt === formData.systemPrompt && p.temperature === formData.temperature
+    );
+    return match?.key ?? '';
+  }, [formData.systemPrompt, formData.temperature]);
+
+  const activeExists = useMemo(
+    () => sceneAnalyzers.some((a) => a.isActive && (!editingAnalyzer || a.id !== editingAnalyzer.id)),
+    [sceneAnalyzers, editingAnalyzer]
+  );
+
+  const formErrors = useMemo(() => {
+    const errs: Record<string, string> = {};
+    if (!formData.name.trim()) errs.name = '请输入名称';
+    if (!formData.providerId) errs.providerId = '请选择提供商';
+    if (!formData.modelId) errs.modelId = '请选择模型';
+    if (!formData.systemPrompt.trim()) errs.systemPrompt = '请填写系统提示词';
+    if (Number.isNaN(formData.temperature) || formData.temperature < 0 || formData.temperature > 2) {
+      errs.temperature = '温度应在 0 - 2 之间';
+    }
+    if (!Number.isInteger(formData.maxTokens) || formData.maxTokens < 100 || formData.maxTokens > 8000) {
+      errs.maxTokens = '最大Token应在 100 - 8000 之间';
+    }
+    return errs;
+  }, [formData]);
+
+  const isValid = useMemo(() => Object.keys(formErrors).length === 0, [formErrors]);
+
   const handleCreate = async () => {
     try {
+      if (!isValid) return;
+      setSaving(true);
       const response = await fetch('/api/admin/scene-analyzers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -171,6 +230,8 @@ export default function SceneAnalyzerManager() {
     } catch (error) {
       console.error('Create error:', error);
       toast.error('创建场景分析器时出错');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -193,6 +254,8 @@ export default function SceneAnalyzerManager() {
     if (!editingAnalyzer) return;
 
     try {
+      if (!isValid) return;
+      setSaving(true);
       const response = await fetch(`/api/admin/scene-analyzers/${editingAnalyzer.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -212,6 +275,8 @@ export default function SceneAnalyzerManager() {
     } catch (error) {
       console.error('Update error:', error);
       toast.error('更新场景分析器时出错');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -256,117 +321,170 @@ export default function SceneAnalyzerManager() {
   };
 
   const DialogForm = ({ isEdit = false }: { isEdit?: boolean }) => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="name">名称 *</Label>
-        <Input
-          id="name"
-          value={formData.name}
-          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-          placeholder="场景分析器名称"
-        />
-      </div>
+    <div className="space-y-6 pb-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">名称 *</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="例如：情绪与意图分析器"
+            />
+            {formErrors.name && <p className="text-xs text-red-500">{formErrors.name}</p>}
+          </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="description">描述</Label>
-        <Input
-          id="description"
-          value={formData.description}
-          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-          placeholder="描述这个场景分析器的功能"
-        />
-      </div>
+          <div className="space-y-2">
+            <Label htmlFor="description">描述</Label>
+            <Textarea
+              id="description"
+              rows={3}
+              value={formData.description}
+              onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder="用于什么场景，输出期望等（可选）"
+            />
+          </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="provider">AI提供商 *</Label>
-          <Select
-            value={formData.providerId}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, providerId: value, modelId: '' }))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择提供商" />
-            </SelectTrigger>
-            <SelectContent>
-              {providers.map((provider) => (
-                <SelectItem key={provider.id} value={provider.id}>
-                  {provider.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-2">
+            <Label htmlFor="provider">AI提供商 *</Label>
+            <Select
+              value={formData.providerId}
+              onValueChange={(value) => setFormData((prev) => ({ ...prev, providerId: value, modelId: '' }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择提供商" />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.map((provider) => (
+                  <SelectItem key={provider.id} value={provider.id}>
+                    {provider.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {formErrors.providerId && <p className="text-xs text-red-500">{formErrors.providerId}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="model">AI模型 *</Label>
+            <Select
+              value={formData.modelId}
+              onValueChange={(value) => setFormData((prev) => ({ ...prev, modelId: value }))}
+              disabled={!formData.providerId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择模型" />
+              </SelectTrigger>
+              <SelectContent>
+                {models.map((model) => (
+                  <SelectItem key={model.id} value={model.id}>
+                    {model.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {formErrors.modelId && <p className="text-xs text-red-500">{formErrors.modelId}</p>}
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="model">AI模型 *</Label>
-          <Select
-            value={formData.modelId}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, modelId: value }))}
-            disabled={!formData.providerId}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择模型" />
-            </SelectTrigger>
-            <SelectContent>
-              {models.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  {model.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="temperature">温度</Label>
+              <Input
+                id="temperature"
+                type="number"
+                min="0"
+                max="2"
+                step="0.1"
+                value={formData.temperature}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, temperature: parseFloat(e.target.value) || 0 }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">值越高越发散（0-2，默认0.3）</p>
+              {formErrors.temperature && <p className="text-xs text-red-500">{formErrors.temperature}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="maxTokens">最大Token数</Label>
+              <Input
+                id="maxTokens"
+                type="number"
+                min="100"
+                max="8000"
+                value={formData.maxTokens}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, maxTokens: parseInt(e.target.value || '0', 10) }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">控制最大输出长度（100-8000）</p>
+              {formErrors.maxTokens && <p className="text-xs text-red-500">{formErrors.maxTokens}</p>}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="preset">提示词预设（可选）</Label>
+            <Select
+              value={matchedPresetKey || undefined}
+              onValueChange={(key) => {
+                const p = presets.find((x) => x.key === key);
+                if (p) {
+                  setFormData((prev) => ({
+                    ...prev,
+                    systemPrompt: p.systemPrompt,
+                    temperature: p.temperature,
+                  }));
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择一个预设以快速填充" />
+              </SelectTrigger>
+              <SelectContent>
+                {presets.map((p) => (
+                  <SelectItem key={p.key} value={p.key}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="systemPrompt">系统提示词 *</Label>
+            <Textarea
+              id="systemPrompt"
+              value={formData.systemPrompt}
+              onChange={(e) => setFormData((prev) => ({ ...prev, systemPrompt: e.target.value }))}
+              placeholder="定义分析目标、输出字段与风格，示例见预设"
+              className="min-h-32 max-h-48 resize-none"
+              rows={6}
+            />
+            <div className="flex justify-between text-xs">
+              <p className="text-muted-foreground">建议包含输出结构与长度限制</p>
+              <p className="text-muted-foreground">{formData.systemPrompt.length} 字符</p>
+            </div>
+            {formErrors.systemPrompt && <p className="text-xs text-red-500">{formErrors.systemPrompt}</p>}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={formData.isActive}
+              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, isActive: checked }))}
+            />
+            <Label>设为活跃</Label>
+          </div>
+          {formData.isActive && activeExists && (
+            <p className="text-xs text-amber-600">当前已有其他活跃分析器，保存后将覆盖现有活跃项。</p>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="temperature">温度</Label>
-          <Input
-            id="temperature"
-            type="number"
-            min="0"
-            max="2"
-            step="0.1"
-            value={formData.temperature}
-            onChange={(e) => setFormData(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="maxTokens">最大Token数</Label>
-          <Input
-            id="maxTokens"
-            type="number"
-            min="100"
-            max="8000"
-            value={formData.maxTokens}
-            onChange={(e) => setFormData(prev => ({ ...prev, maxTokens: parseInt(e.target.value) }))}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="systemPrompt">系统提示词 *</Label>
-        <Textarea
-          id="systemPrompt"
-          value={formData.systemPrompt}
-          onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
-          placeholder="定义场景分析器的行为和输出格式..."
-          className="min-h-32"
-        />
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <Switch
-          checked={formData.isActive}
-          onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
-        />
-        <Label>设为活跃（只能有一个活跃的场景分析器）</Label>
-      </div>
-
-      <div className="flex justify-end space-x-2">
-        <Button 
-          variant="outline" 
+      <div className="flex justify-end gap-2 pt-2">
+        <Button
+          variant="outline"
           onClick={() => {
             if (isEdit) {
               setIsEditDialogOpen(false);
@@ -379,8 +497,8 @@ export default function SceneAnalyzerManager() {
         >
           取消
         </Button>
-        <Button onClick={isEdit ? handleUpdate : handleCreate}>
-          {isEdit ? '更新' : '创建'}
+        <Button disabled={!isValid || saving} onClick={isEdit ? handleUpdate : handleCreate}>
+          {saving ? '保存中...' : isEdit ? '更新' : '创建'}
         </Button>
       </div>
     </div>
@@ -410,13 +528,16 @@ export default function SceneAnalyzerManager() {
               创建场景分析器
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>创建场景分析器</DialogTitle>
-            </DialogHeader>
-            <DialogForm />
-          </DialogContent>
-        </Dialog>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-w-2xl md:max-w-3xl lg:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>创建场景分析器</DialogTitle>
+            <DialogDescription>
+              配置您的场景分析器，用于自动分析用户消息的情感、意图和上下文
+            </DialogDescription>
+          </DialogHeader>
+          <DialogForm />
+        </DialogContent>
+      </Dialog>
       </div>
 
       {sceneAnalyzers.length === 0 ? (
@@ -503,9 +624,12 @@ export default function SceneAnalyzerManager() {
       )}
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto sm:max-w-2xl md:max-w-3xl lg:max-w-4xl">
           <DialogHeader>
             <DialogTitle>编辑场景分析器</DialogTitle>
+            <DialogDescription>
+              修改场景分析器的配置和参数
+            </DialogDescription>
           </DialogHeader>
           <DialogForm isEdit />
         </DialogContent>

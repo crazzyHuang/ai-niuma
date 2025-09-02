@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Card, CardContent } from '@/components/ui/card';
 import { Plus, MessageCircle, Users, Search, ArrowLeft, ArrowRight, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu, ChevronRight, X, Settings, LogOut, User, Trash2, Activity, TestTube } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { AuthLayout } from '@/components/layout/AuthLayout';
 
 // 消息和流式数据接口
 interface Message {
@@ -21,6 +22,7 @@ interface Message {
   timestamp: Date;
   agent?: string;
 }
+
 
 interface StreamChunk {
   type: 'user_message' | 'agent_start' | 'chunk' | 'agent_complete' | 'agent_error' | 'conversation_complete' | 'error';
@@ -98,14 +100,16 @@ function ChatInterface({
     try {
       const response = await fetch(`/api/conversations/${conversationId}/messages`);
       if (response.ok) {
-        const data = await response.json();
-        setMessages(data.map((msg: any) => ({
-          id: msg.id,
-          role: msg.role,
-          content: msg.content,
-          timestamp: new Date(msg.createdAt),
-          agent: msg.step
-        })));
+        const result = await response.json();
+        if (result.success) {
+          setMessages(result.data.map((msg: any) => ({
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.createdAt),
+            agent: msg.step
+          })));
+        }
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
@@ -153,9 +157,9 @@ function ChatInterface({
           switch (data.type) {
             case 'user_message':
               // Replace temporary user message with real one from database
-              setMessages(prev => prev.map(msg => 
+              setMessages(prev => prev.map(msg =>
                 msg.id.startsWith('temp-user-') && msg.content === userMessage
-                  ? { ...msg, id: data.id, timestamp: new Date(data.timestamp) }
+                  ? { ...msg, id: data.id || msg.id, timestamp: new Date(data.timestamp) }
                   : msg
               ));
               break;
@@ -493,7 +497,7 @@ interface Agent {
 
 export default function ChatPage() {
   const router = useRouter();
-  const { user, logout, isAuthenticated, isLoading } = useAuth();
+  const { user, logout } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -509,13 +513,24 @@ export default function ChatPage() {
       const response = await fetch('/api/conversations');
       if (response.ok) {
         const data = await response.json();
-        setConversations(data);
-        if (data.length > 0 && !selectedConversation) {
-          setSelectedConversation(data[0].id);
+        console.log('Conversations data:', data);
+
+        if (Array.isArray(data)) {
+          setConversations(data);
+          if (data.length > 0 && !selectedConversation) {
+            setSelectedConversation(data[0].id);
+          }
+        } else {
+          console.error('Conversations data is not an array:', data);
+          setConversations([]);
         }
+      } else {
+        console.error('Failed to load conversations, response not ok');
+        setConversations([]);
       }
     } catch (error) {
       console.error('Failed to load conversations:', error);
+      setConversations([]);
     }
   }, [selectedConversation]);
 
@@ -524,23 +539,22 @@ export default function ChatPage() {
       const response = await fetch(`/api/conversations/${conversationId}`, {
         method: 'DELETE',
       });
-      
+
       if (response.ok) {
         // 从对话列表中移除已删除的对话
-        setConversations(prev => prev.filter(c => c.id !== conversationId));
-        
+        setConversations(prev => Array.isArray(prev) ? prev.filter(c => c.id !== conversationId) : []);
+
         // 如果删除的是当前选中的对话，选择列表中的第一个对话
         if (selectedConversation === conversationId) {
-          const remainingConversations = conversations.filter(c => c.id !== conversationId);
+          const remainingConversations = Array.isArray(conversations) ? conversations.filter(c => c.id !== conversationId) : [];
           if (remainingConversations.length > 0) {
             setSelectedConversation(remainingConversations[0].id);
           } else {
             setSelectedConversation(null);
           }
         }
-        
-        // 清空消息列表
-        setMessages([]);
+
+        // 清空消息列表 (TODO: 需要通过props传递clear函数给ChatInterface)
       } else {
         console.error('Failed to delete conversation');
         alert('删除对话失败，请重试');
@@ -563,26 +577,11 @@ export default function ChatPage() {
     }
   }, []);
 
-  // 加载对话列表
+  // 加载对话列表 - AuthLayout确保用户已认证
   useEffect(() => {
-    if (isAuthenticated && user) {
-      loadConversations();
-      loadAgents();
-    }
-  }, [isAuthenticated, user, loadConversations, loadAgents]);
-
-  // 如果用户未认证，不应该渲染聊天页面（中间件应该已经处理重定向）
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated || !user) {
-    return null; // 中间件会处理重定向
-  }
+    loadConversations();
+    loadAgents();
+  }, [loadConversations, loadAgents]);
 
   const createConversation = async () => {
     if (selectedAgents.length === 0) return;
@@ -604,7 +603,7 @@ export default function ChatPage() {
 
       if (response.ok) {
         const newConversation = await response.json();
-        setConversations(prev => [newConversation, ...prev]);
+        setConversations(prev => Array.isArray(prev) ? [newConversation, ...prev] : [newConversation]);
         setSelectedConversation(newConversation.id);
         setIsCreateDialogOpen(false);
         setNewGroupName('');
@@ -615,13 +614,14 @@ export default function ChatPage() {
     }
   };
 
-  const filteredConversations = conversations.filter(conv =>
+  const filteredConversations = Array.isArray(conversations) ? conversations.filter(conv =>
     conv.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ) : [];
 
-  const selectedConversationData = conversations.find(conv => conv.id === selectedConversation) || null;
+  const selectedConversationData = Array.isArray(conversations) ? (conversations.find(conv => conv.id === selectedConversation) || null) : null;
 
   return (
+    <AuthLayout>
     <div className="min-h-screen bg-background/50 flex items-center justify-center p-4">
       <div className="w-full max-w-6xl h-[700px] bg-background rounded-xl shadow-lg overflow-hidden border border-border flex">
         {/* 左侧边栏 */}
@@ -638,7 +638,7 @@ export default function ChatPage() {
                       <Button variant="ghost" size="sm" className="h-8 w-8 rounded-full p-0">
                         <Avatar className="h-6 w-6">
                           <div className="h-full w-full rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
-                            {user.name?.slice(0, 1) || user.email.slice(0, 1).toUpperCase()}
+                            {user ? (user.name?.slice(0, 1) || user.email.slice(0, 1).toUpperCase()) : 'A'}
                           </div>
                         </Avatar>
                       </Button>
@@ -646,11 +646,11 @@ export default function ChatPage() {
                     <DropdownMenuContent align="end" className="w-56">
                       <div className="flex items-center justify-start gap-2 p-2">
                         <div className="flex flex-col space-y-1 leading-none">
-                          {user.name && (
+                          {user?.name && (
                             <p className="font-medium">{user.name}</p>
                           )}
                           <p className="w-[200px] truncate text-sm text-muted-foreground">
-                            {user.email}
+                            {user?.email || 'user@example.com'}
                           </p>
                         </div>
                       </div>
@@ -686,7 +686,7 @@ export default function ChatPage() {
                     <Button variant="ghost" size="sm" className="h-8 w-8 rounded-full p-0">
                       <Avatar className="h-6 w-6">
                         <div className="h-full w-full rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
-                          {user.name?.slice(0, 1) || user.email.slice(0, 1).toUpperCase()}
+                          {user ? (user.name?.slice(0, 1) || user.email.slice(0, 1).toUpperCase()) : 'A'}
                         </div>
                       </Avatar>
                     </Button>
@@ -694,11 +694,11 @@ export default function ChatPage() {
                   <DropdownMenuContent align="end" className="w-56">
                     <div className="flex items-center justify-start gap-2 p-2">
                       <div className="flex flex-col space-y-1 leading-none">
-                        {user.name && (
+                        {user?.name && (
                           <p className="font-medium">{user.name}</p>
                         )}
                         <p className="w-[200px] truncate text-sm text-muted-foreground">
-                          {user.email}
+                          {user?.email || 'user@example.com'}
                         </p>
                       </div>
                     </div>
@@ -1124,5 +1124,6 @@ export default function ChatPage() {
         )}
       </div>
     </div>
+    </AuthLayout>
   );
 }

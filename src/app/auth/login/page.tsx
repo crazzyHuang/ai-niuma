@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Mail, Lock, LogIn } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { LoginLayout } from '@/components/layout/AuthLayout'
 
 interface LoginFormData {
   email: string
@@ -100,17 +101,16 @@ export default function LoginPage() {
 
       if (response.ok) {
         toast.success('登录成功！')
-        
+
         // Use AuthContext login method to update global state
-        login(data.token, data.user)
-        
-        // Wait a bit longer for cookie to be set, then redirect
+        login(data.data.token, data.data.user)
+
+        // Wait and redirect to chat page
         setTimeout(() => {
-          console.log('Redirecting to /chat after login...')
           window.location.replace('/chat')
         }, 500)
       } else {
-        toast.error(data.message || '登录失败，请稍后重试')
+        toast.error(data.error || '登录失败，请稍后重试')
       }
     } catch (error) {
       console.error('Login error:', error)
@@ -121,6 +121,7 @@ export default function LoginPage() {
   }
 
   return (
+    <LoginLayout>
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">欢迎回来</h2>
@@ -218,5 +219,6 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+    </LoginLayout>
   )
 }

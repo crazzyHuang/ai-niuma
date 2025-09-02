@@ -982,8 +982,8 @@ ${availableAgentInfo}
     const strongIndicators = ['非常', '极其', '特别', '超级', '太', '真的', '完全', '十分', '相当', '很'];
     const weakIndicators = ['有点', '稍微', '略微', '还好', '还行'];
     
-    let hasStrongIndicators = strongIndicators.some(word => message.includes(word));
-    let hasWeakIndicators = weakIndicators.some(word => message.includes(word));
+    const hasStrongIndicators = strongIndicators.some(word => message.includes(word));
+    const hasWeakIndicators = weakIndicators.some(word => message.includes(word));
     
     const baseIntensity = {
       'excited': 0.8,

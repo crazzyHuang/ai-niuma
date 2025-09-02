@@ -77,18 +77,8 @@ export async function GET(request: NextRequest) {
 
     // Return success response with updated user data
     return NextResponse.json(
-        APIResponseHelper.success({
-      message: '认证令牌有效',
-      user,
-      tokenInfo: {
-        userId: decoded.userId,
-        email: decoded.email,
-        role: decoded.role,
-        exp: decoded.exp,
-        iat: decoded.iat,
-      },
-    })
-      )
+      APIResponseHelper.success(user, '认证令牌有效')
+    )
 
   } catch (error) {
     console.error('Token verification error:', error)

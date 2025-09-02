@@ -170,7 +170,7 @@ export default function RegisterPage() {
         toast.success('注册成功！正在为您登录...')
         
         // Use AuthContext login method to update global state
-        login(data.token, data.user)
+        login(data.data.token, data.data.user)
         
         // Wait a bit longer for cookie to be set, then redirect
         setTimeout(() => {
@@ -178,7 +178,7 @@ export default function RegisterPage() {
           window.location.replace('/chat')
         }, 500)
       } else {
-        toast.error(data.message || '注册失败，请稍后重试')
+        toast.error(data.error || '注册失败，请稍后重试')
       }
     } catch (error) {
       console.error('Register error:', error)

@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, MoreVertical, Send, Mic, FileText, Camera, MapPin, Menu } from 'lucide-react';
+import { AuthLayout } from '@/components/layout/AuthLayout';
 
 // 使用 lucide-react 图标组件
 
@@ -114,9 +115,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           switch (data.type) {
             case 'user_message':
               // Replace temporary user message with real one from database
-              setMessages(prev => prev.map(msg => 
+              setMessages(prev => prev.map(msg =>
                 msg.id.startsWith('temp-user-') && msg.content === userMessage
-                  ? { ...msg, id: data.id, timestamp: new Date(data.timestamp) }
+                  ? { ...msg, id: data.id || msg.id, timestamp: new Date(data.timestamp) }
                   : msg
               ));
               break;
@@ -223,6 +224,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   };
 
   return (
+    <AuthLayout>
     <div className="min-h-screen bg-background/50 flex items-center justify-center p-4">
       <div className="w-full max-w-4xl mx-auto bg-background rounded-xl shadow-lg overflow-hidden border border-border">
         {/* 微信风格头部导航栏 - shadcn颜色 */}
@@ -404,5 +406,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       </div>
       </div>
     </div>
+    </AuthLayout>
   );
 }

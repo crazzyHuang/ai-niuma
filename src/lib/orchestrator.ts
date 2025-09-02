@@ -503,7 +503,7 @@ export class Orchestrator {
       // 🧠 分析阶段 - 情感和意图分析
       const analysisStartTime = Date.now();
       let aiAnalysis = null;
-      let sceneAnalysis = null;
+      const sceneAnalysis = null;
       
       try {
         // 并行执行AI分析和场景分析（如果有可用Agent）
@@ -946,7 +946,7 @@ export class Orchestrator {
       }
 
       // 获取流程配置
-      let steps: string[] = this.selectAgentsDynamically(conversation.mode, userMessageContent);
+      const steps: string[] = this.selectAgentsDynamically(conversation.mode, userMessageContent);
       console.log('📋 智能选择智能体:', steps);
 
       // 构建群聊上下文，让每个agent都能看到完整对话
@@ -1280,7 +1280,7 @@ export class Orchestrator {
     emotion: string,
     topic: string
   ): string[] {
-    let optimizedSteps = [...steps];
+    const optimizedSteps = [...steps];
 
     // 负面情绪优先安排共情者
     if (emotion === 'negative') {

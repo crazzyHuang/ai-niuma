@@ -856,7 +856,7 @@ export class IntelligentAgentBus {
           break;
 
         case 'pipeline':
-          let pipelineContext = { request, analysisResult, previousResults: [] };
+          const pipelineContext = { request, analysisResult, previousResults: [] };
           for (const agentExec of phase.agents) {
             const result = await this.executeAgentWithRouting(agentExec, pipelineContext, analysisResult);
             if (result) {
