@@ -430,14 +430,14 @@ class SequentialStrategy implements SchedulingStrategy {
   isApplicable(sceneAnalysis: SceneAnalysisResult, availableAgents: BaseAgent[]): boolean {
     // 分析类、学习类场景适合顺序执行
     return ['learning_discussion', 'problem_solving'].includes(sceneAnalysis.sceneType) ||
-           sceneAnalysis.userIntent?.expectationType === 'deep_discussion';
+           sceneAnalysis.userIntent.expectationType === 'deep_discussion';
   }
 
   async createExecutionPlan(
     sceneAnalysis: SceneAnalysisResult, 
     availableAgents: BaseAgent[]
   ): Promise<ExecutionPlan> {
-    const selectedAgents = this.selectAgentsFromPlan(sceneAnalysis.participationPlan || [], availableAgents);
+    const selectedAgents = this.selectAgentsFromPlan(sceneAnalysis.participationPlan, availableAgents);
     
     return {
       strategyUsed: this.name,
