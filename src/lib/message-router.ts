@@ -141,25 +141,6 @@ export class MessageRouter {
       }]
     });
 
-    // 执行请求直接路由规则
-    this.addRoutingRule({
-      id: 'execution_request_direct',
-      priority: 0.95, // 高优先级，确保优先匹配
-      conditions: [{
-        type: 'message_type',
-        operator: 'equals',
-        value: 'execution_request'
-      }],
-      targets: [{
-        type: 'single',
-        agentSelector: (agents, context) => {
-          // 从消息元数据中获取目标Agent ID
-          const targetAgentId = context.originalMessage.metadata?.recipient;
-          return targetAgentId ? agents.filter(a => a.id === targetAgentId) : [];
-        },
-        deliveryMode: 'immediate'
-      }]
-    });
 
     console.log(`📋 默认路由规则已加载: ${this.routingRules.size} 个规则`);
   }

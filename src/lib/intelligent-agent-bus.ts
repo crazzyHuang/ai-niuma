@@ -237,9 +237,6 @@ export abstract class BaseAgent {
     
     // 默认处理：根据消息类型执行不同的逻辑
     switch (message.type) {
-      case 'execution_request':
-        await this.execute(message.payload);
-        break;
       case 'scene_analysis_result':
         await this.onSceneAnalysisReceived(message.payload);
         break;
