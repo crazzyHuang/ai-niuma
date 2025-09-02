@@ -913,58 +913,13 @@ export class IntelligentAgentBus {
         expectedRole: agentExecution.expectedRole
       };
 
-      // 发送执行请求消息
-      const executionMessage: AgentMessage = {
-        id: `exec_req_${agent.id}_${Date.now()}`,
-        type: 'execution_request',
-        payload: executionInput,
-        metadata: {
-          timestamp: new Date(),
-          sender: 'agent-bus',
-          recipient: agent.id,
-          priority: agentExecution.priority
-        }
-      };
 
-      const routingContext: RoutingContext = {
-        originalMessage: executionMessage,
-        sceneAnalysis: analysisResult,
-        conversationId: input.request?.conversationId || 'unknown',
-        availableAgents: this.getRegisteredAgents(),
-        executionHistory: []
-      };
-
-      // 通过消息路由发送请求
-      await messageRouter.routeMessage(executionMessage, routingContext);
-
-      // 执行Agent
-      const result = await agent.execute({
-        ...input,
-        expectedRole: agentExecution.expectedRole,
-        analysisResult
-      });
+      // 直接执行Agent（使用正确的数据结构）
+      const result = await agent.execute(executionInput);
 
       const executionTime = Date.now() - executionStartTime;
 
       if (result.success) {
-        // 发送执行完成消息
-        const completionMessage: AgentMessage = {
-          id: `exec_complete_${agent.id}_${Date.now()}`,
-          type: 'execution_completed',
-          payload: {
-            agentId: agent.id,
-            result: result,
-            executionTime
-          },
-          metadata: {
-            timestamp: new Date(),
-            sender: agent.id,
-            priority: 0.8
-          }
-        };
-
-        await messageRouter.routeMessage(completionMessage, routingContext);
-        
         return result;
       }
 
