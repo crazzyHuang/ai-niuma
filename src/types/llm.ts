@@ -8,6 +8,7 @@ export type LLMProvider =
   | 'doubao' 
   | 'xai'
   | 'modelscope'
+  | 'bigmodel'
   | 'custom';
 
 export interface LLMConfig {

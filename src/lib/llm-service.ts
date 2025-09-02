@@ -6,6 +6,7 @@ import DoubaoAdapter from './adapters/doubao-adapter';
 import GoogleAdapter from './adapters/google-adapter';
 import XAIAdapter from './adapters/xai-adapter';
 import ModelScopeAdapter from './adapters/modelscope-adapter-simple';
+import BigModelAdapter from './adapters/bigmodel-adapter';
 
 class LLMService {
   private adapters: Map<LLMProvider, LLMProviderAdapter> = new Map();
@@ -19,6 +20,7 @@ class LLMService {
     this.adapters.set('google', new GoogleAdapter());
     this.adapters.set('xai', new XAIAdapter());
     this.adapters.set('modelscope', new ModelScopeAdapter());
+    this.adapters.set('bigmodel', new BigModelAdapter());
   }
 
   /**
