@@ -270,8 +270,9 @@ ${context ? JSON.stringify(context, null, 2) : '暂无额外上下文'}
     const plan: ParticipationSuggestion[] = [];
     
     suggestions.forEach((suggestion, index) => {
+      const roleTag = this.mapSceneToRoleTag(suggestion);
       plan.push({
-        agentName: suggestion,
+        agentName: roleTag, // 现在使用 roleTag 而不是场景建议
         priority: 1 - (index * 0.2), // 递减优先级
         roleInConversation: this.mapToRole(suggestion),
         expectedContribution: this.getExpectedContribution(suggestion, sceneType),
@@ -280,6 +281,24 @@ ${context ? JSON.stringify(context, null, 2) : '暂无额外上下文'}
     });
     
     return plan;
+  }
+
+  /**
+   * 将场景类型映射到对应的 roleTag
+   */
+  private mapSceneToRoleTag(sceneType: string): string {
+    const sceneToRoleMap: Record<string, string> = {
+      'emotional_support': 'EMPATHY',
+      'personal_sharing': 'EMPATHY', 
+      'problem_solving': 'PRACTICAL',
+      'work_discussion': 'PRACTICAL',
+      'creative_brainstorm': 'CREATIVE',
+      'humor_entertainment': 'CREATIVE',
+      'learning_discussion': 'ANALYST',
+      'debate_discussion': 'ANALYST',
+      'casual_chat': 'FOLLOWUP'
+    };
+    return sceneToRoleMap[sceneType] || 'EMPATHY';
   }
 
   /**

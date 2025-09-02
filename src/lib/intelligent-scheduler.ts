@@ -93,6 +93,20 @@ export class IntelligentScheduler {
   }
 
   /**
+   * 将 roleTag 映射到实际的 agent ID
+   */
+  private mapRoleTagToAgentId(roleTag: string): string {
+    const roleAgentMapping: Record<string, string> = {
+      'EMPATHY': 'chat-executor',
+      'PRACTICAL': 'chat-executor', 
+      'CREATIVE': 'chat-executor',
+      'ANALYST': 'chat-executor',
+      'FOLLOWUP': 'chat-executor'
+    };
+    return roleAgentMapping[roleTag] || 'chat-executor';
+  }
+
+  /**
    * 初始化所有调度策略
    */
   private initializeStrategies(): void {
@@ -445,7 +459,7 @@ class SequentialStrategy implements SchedulingStrategy {
       phases: [{
         name: 'sequential_discussion',
         agents: selectedAgents.map((agent, index) => ({
-          agentId: agent.agentName,
+          agentId: this.mapRoleTagToAgentId(agent.agentName),
           priority: 1 - (index * 0.1),
           expectedRole: agent.roleInConversation,
           estimatedDuration: 4000
@@ -469,7 +483,7 @@ class SequentialStrategy implements SchedulingStrategy {
   ): ParticipationSuggestion[] {
     return participationPlan
       .filter(suggestion => 
-        availableAgents.some(agent => agent.id === suggestion.agentName)
+        availableAgents.some(agent => agent.id === this.mapRoleTagToAgentId(suggestion.agentName))
       )
       .sort((a, b) => b.priority - a.priority)
       .slice(0, 4); // 最多4个Agent
@@ -501,7 +515,7 @@ class ParallelStrategy implements SchedulingStrategy {
       phases: [{
         name: 'parallel_response',
         agents: selectedAgents.map(agent => ({
-          agentId: agent.agentName,
+          agentId: this.mapRoleTagToAgentId(agent.agentName),
           priority: agent.priority,
           expectedRole: agent.roleInConversation,
           estimatedDuration: 5000
@@ -553,7 +567,7 @@ class AdaptiveDynamicStrategy implements SchedulingStrategy {
       phases.push({
         name: 'primary_response',
         agents: primaryResponders.map(agent => ({
-          agentId: agent.agentName,
+          agentId: this.mapRoleTagToAgentId(agent.agentName),
           priority: agent.priority,
           expectedRole: agent.roleInConversation,
           estimatedDuration: 4000
@@ -572,7 +586,7 @@ class AdaptiveDynamicStrategy implements SchedulingStrategy {
       phases.push({
         name: 'supportive_response',
         agents: supporters.map(agent => ({
-          agentId: agent.agentName,
+          agentId: this.mapRoleTagToAgentId(agent.agentName),
           priority: agent.priority,
           expectedRole: agent.roleInConversation,
           estimatedDuration: 3000
@@ -632,7 +646,7 @@ class EmotionDrivenStrategy implements SchedulingStrategy {
       phases: [{
         name: 'emotional_support',
         agents: empathyAgents.slice(0, 2).map(agent => ({
-          agentId: agent.agentName,
+          agentId: this.mapRoleTagToAgentId(agent.agentName),
           priority: agent.priority,
           expectedRole: 'emotional_supporter',
           estimatedDuration: 4000
@@ -678,7 +692,7 @@ class CollaborativeStrategy implements SchedulingStrategy {
       phases: [{
         name: 'idea_generation',
         agents: creativeAgents.map(agent => ({
-          agentId: agent.agentName,
+          agentId: this.mapRoleTagToAgentId(agent.agentName),
           priority: agent.priority,
           expectedRole: 'creative_contributor',
           estimatedDuration: 4000
@@ -688,7 +702,7 @@ class CollaborativeStrategy implements SchedulingStrategy {
       }, {
         name: 'idea_synthesis',
         agents: [{
-          agentId: creativeAgents[0]?.agentName || 'creative-agent',
+          agentId: this.mapRoleTagToAgentId(creativeAgents[0]?.agentName || 'CREATIVE'),
           priority: 1.0,
           expectedRole: 'synthesizer',
           estimatedDuration: 3000
@@ -734,7 +748,7 @@ class EfficiencyOptimizedStrategy implements SchedulingStrategy {
       phases: [{
         name: 'rapid_response',
         agents: [{
-          agentId: topAgent.agentName,
+          agentId: this.mapRoleTagToAgentId(topAgent.agentName),
           priority: 1.0,
           expectedRole: 'rapid_responder',
           estimatedDuration: 3000
